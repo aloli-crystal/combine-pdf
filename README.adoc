@@ -149,7 +149,7 @@ Add to your `shard.yml`:
 dependencies:
   combine-pdf:
     github: aloli-crystal/combine-pdf
-    version: "~> 1.0.31.46"
+    version: "~> 1.0.31.47"
 ----
 
 then run `shards install`.

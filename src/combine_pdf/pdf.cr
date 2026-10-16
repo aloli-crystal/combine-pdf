@@ -169,7 +169,7 @@ module CombinePDF
     # could prune unreferenced objects.
     def remove(page_index : Int32) : ::PDF::Objects::Reference?
       effective = page_index < 0 ? @merger.page_refs.size + page_index : page_index
-      return nil if effective < 0 || effective >= @merger.page_refs.size
+      return if effective < 0 || effective >= @merger.page_refs.size
       @merger.page_refs.delete_at(effective)
     end
 

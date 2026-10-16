@@ -345,13 +345,13 @@ module CombinePDF
       end
 
       # Si CTM ≈ identité, pas besoin d'inverse
-      return nil if (a - 1.0).abs < 1e-9 && b.abs < 1e-9 &&
-                    c.abs < 1e-9 && (d - 1.0).abs < 1e-9 &&
-                    e.abs < 1e-9 && f.abs < 1e-9
+      return if (a - 1.0).abs < 1e-9 && b.abs < 1e-9 &&
+                c.abs < 1e-9 && (d - 1.0).abs < 1e-9 &&
+                e.abs < 1e-9 && f.abs < 1e-9
 
       # Inverse de [a b c d e f]
       det = a * d - b * c
-      return nil if det.abs < 1e-12 # non-inversible, on se rabat sur identité
+      return if det.abs < 1e-12 # non-inversible, on se rabat sur identité
 
       a_i = d / det
       b_i = -b / det

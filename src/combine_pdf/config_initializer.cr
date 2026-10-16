@@ -72,7 +72,7 @@ module CombinePDF
     # Profils disponibles. Chacun retourne une `InitOptions` aux défauts
     # appropriés à un cas d'usage. Les valeurs peuvent ensuite être
     # surchargées par les flags CLI.
-    PROFILES = %w(booklet book report slides minimal)
+    PROFILES = %w[booklet book report slides minimal]
 
     # Construit une `InitOptions` pour un profil donné. Lève
     # `ArgumentError` si le profil est inconnu.

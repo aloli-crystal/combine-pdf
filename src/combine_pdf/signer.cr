@@ -26,7 +26,7 @@ module CombinePDF
     # renamed from `pdfsig` precisely to avoid poppler's tool). Bare
     # `pdfsig` is poppler's and is deliberately NOT probed, so we never
     # call the wrong binary. Use $COMBINE_PDF_PDFSIG to override the path.
-    CANDIDATES = %w(pdf-sign)
+    CANDIDATES = %w[pdf-sign]
 
     # Resolves the ALOLI signing binary, or `nil` if none is found.
     def self.binary : String?

@@ -144,7 +144,7 @@ module CombinePDF
     end
 
     private def parse_toc(node : YAML::Any?) : Config::Toc?
-      return nil unless node
+      return unless node
       Config::Toc.new(
         bookmarks: parse_bool(node["bookmarks"]?, true),
         page: parse_toc_page(node["page"]?),
@@ -152,9 +152,9 @@ module CombinePDF
     end
 
     private def parse_toc_page(node : YAML::Any?) : Config::Toc::Page?
-      return nil unless node
+      return unless node
       enabled = parse_bool(node["enabled"]?, true)
-      return nil unless enabled
+      return unless enabled
       Config::Toc::Page.new(
         enabled: true,
         title: parse_str(node["title"]?, ""),
@@ -172,20 +172,18 @@ module CombinePDF
     # (pas de chiffrement). Les mots de passe peuvent rester vides
     # dans le YAML — ils seront fournis en CLI ou via env vars.
     private def parse_encrypt(node : YAML::Any?) : Config::Encrypt?
-      return nil unless node
+      return unless node
 
       # `enabled: false` désactive explicitement même si le bloc est
       # présent (commute facile pour des envs CI/CD).
       enabled = parse_bool(node["enabled"]?, true)
-      return nil unless enabled
+      return unless enabled
 
       perms_node = node["permissions"]?
       perms = if perms_node
                 arr = perms_node.as_a?
                 if arr
                   arr.compact_map(&.as_s?)
-                else
-                  nil
                 end
               end
 
@@ -199,9 +197,9 @@ module CombinePDF
     end
 
     private def parse_watermark(node : YAML::Any?) : Config::Watermark?
-      return nil unless node
+      return unless node
       text = parse_str(node["text"]?, "")
-      return nil if text.empty?
+      return if text.empty?
       Config::Watermark.new(
         text: text,
         style: parse_str(node["style"]?, "diagonal"),

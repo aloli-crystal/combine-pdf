@@ -260,7 +260,6 @@ module CombinePDF
         when "copy"     then ::PDF::Security::Permission::Copy
         when "modify"   then ::PDF::Security::Permission::Modify
         when "annotate" then ::PDF::Security::Permission::Annotate
-        else                 nil
         end
       end
     end

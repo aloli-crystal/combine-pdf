@@ -158,84 +158,84 @@ module CombinePDF
 
       parser = OptionParser.new do |p|
         p.banner = <<-BANNER
-    Usage : combine-pdf SOUS-COMMANDE [options]
-            combine-pdf [options] FICHIERS...
+          Usage : combine-pdf SOUS-COMMANDE [options]
+                  combine-pdf [options] FICHIERS...
 
-    Mode déclaratif (recommandé pour les livrets) :
-      combine-pdf init [options]
-        Crée un fichier .combine-pdf.yml dans le dossier
-        courant, peuplé avec la liste des PDF présents. Voir les
-        options ci-dessous pour personnaliser le YAML généré.
+          Mode déclaratif (recommandé pour les livrets) :
+            combine-pdf init [options]
+              Crée un fichier .combine-pdf.yml dans le dossier
+              courant, peuplé avec la liste des PDF présents. Voir les
+              options ci-dessous pour personnaliser le YAML généré.
 
-      combine-pdf refresh [-r]
-        Met à jour la liste `files:` du YAML : ajoute en fin les
-        nouveaux PDF, commente les entrées dont le fichier a
-        disparu. Préserve commentaires, ordre et titres existants.
+            combine-pdf refresh [-r]
+              Met à jour la liste `files:` du YAML : ajoute en fin les
+              nouveaux PDF, commente les entrées dont le fichier a
+              disparu. Préserve commentaires, ordre et titres existants.
 
-      combine-pdf build
-      combine-pdf
-        Construit le livret depuis .combine-pdf.yml du
-        dossier courant : assemble, numérote, ajoute filigrane,
-        page de titre + sommaire cliquable. En terminal interactif,
-        le PDF produit est ouvert dans le viewer par défaut
-        (Aperçu sur macOS, xdg-open sinon) — passer `--no-open`
-        pour désactiver.
+            combine-pdf build
+            combine-pdf
+              Construit le livret depuis .combine-pdf.yml du
+              dossier courant : assemble, numérote, ajoute filigrane,
+              page de titre + sommaire cliquable. En terminal interactif,
+              le PDF produit est ouvert dans le viewer par défaut
+              (Aperçu sur macOS, xdg-open sinon) — passer `--no-open`
+              pour désactiver.
 
-      combine-pdf compress FICHIER.pdf [-o SORTIE.pdf | -i] [-L]
-        Réduit la taille d'un PDF (recompression Flate uniforme +
-        garbage collection des objets orphelins). Gain typique 30-80
-        %. Pas de downsampling d'images en pur Crystal — voir le
-        flag --deep pour ce besoin (via aloli-crystal/ghostscript).
-        Avec `-L / --linearize`, produit un PDF *Fast Web View*
-        (ISO 32000-1 § F) pour streaming HTTP — nécessite `qpdf`
-        installé.
+            combine-pdf compress FICHIER.pdf [-o SORTIE.pdf | -i] [-L]
+              Réduit la taille d'un PDF (recompression Flate uniforme +
+              garbage collection des objets orphelins). Gain typique 30-80
+              %. Pas de downsampling d'images en pur Crystal — voir le
+              flag --deep pour ce besoin (via aloli-crystal/ghostscript).
+              Avec `-L / --linearize`, produit un PDF *Fast Web View*
+              (ISO 32000-1 § F) pour streaming HTTP — nécessite `qpdf`
+              installé.
 
-      combine-pdf gs FICHIER.pdf [-o SORTIE.pdf | -i]
-        Normalise un PDF via Ghostscript. Utile quand le parser
-        interne refuse un PDF mal formé (ex. PDF linéarisé Acrobat
-        ancien avec stream zlib invalide). Court-circuite le parser
-        Crystal et délègue tout à gs. Nécessite ghostscript installé.
+            combine-pdf gs FICHIER.pdf [-o SORTIE.pdf | -i]
+              Normalise un PDF via Ghostscript. Utile quand le parser
+              interne refuse un PDF mal formé (ex. PDF linéarisé Acrobat
+              ancien avec stream zlib invalide). Court-circuite le parser
+              Crystal et délègue tout à gs. Nécessite ghostscript installé.
 
-      combine-pdf encrypt FICHIER.pdf [-o SORTIE.pdf | -i]
-                          [-l LEVEL] [-u USER_PWD] [-w OWNER_PWD]
-        Chiffre un PDF (Standard Security Handler RC4-128, AES-128
-        ou AES-256). Pas besoin du YAML — on opère directement sur
-        le fichier passé en argument. Voir aussi la section `encrypt:`
-        du YAML pour chiffrer le livret produit par `build`.
+            combine-pdf encrypt FICHIER.pdf [-o SORTIE.pdf | -i]
+                                [-l LEVEL] [-u USER_PWD] [-w OWNER_PWD]
+              Chiffre un PDF (Standard Security Handler RC4-128, AES-128
+              ou AES-256). Pas besoin du YAML — on opère directement sur
+              le fichier passé en argument. Voir aussi la section `encrypt:`
+              du YAML pour chiffrer le livret produit par `build`.
 
-      combine-pdf decrypt FICHIER.pdf [-o SORTIE.pdf | -i] [-u PWD]
-        Déchiffre un PDF protégé : le sauve sans `/Encrypt` (PDF en
-        clair). Le mot de passe (utilisateur OU owner) est fourni
-        via `-u` ; vide par défaut pour les PDFs « owner-only
-        protected » (cas le plus courant : restrictions sans
-        password à l'ouverture). Symétrique de `encrypt`.
+            combine-pdf decrypt FICHIER.pdf [-o SORTIE.pdf | -i] [-u PWD]
+              Déchiffre un PDF protégé : le sauve sans `/Encrypt` (PDF en
+              clair). Le mot de passe (utilisateur OU owner) est fourni
+              via `-u` ; vide par défaut pour les PDFs « owner-only
+              protected » (cas le plus courant : restrictions sans
+              password à l'ouverture). Symétrique de `encrypt`.
 
-      combine-pdf rasterize FICHIER.pdf [-o SORTIE.pdf | -i]
-                          [--dpi N] [--quality Q]
-        Rastérise chaque page en JPEG plein page (via Ghostscript),
-        puis réembarque dans un nouveau PDF. Anti-extraction /
-        anti-falsification : plus de texte extractible, un filigrane
-        posé avant la rastérisation devient indissociable du contenu.
-        Pattern observé chez DossierFacile pour les RIB protégés.
-        Compromis : taille fichier en hausse, accessibilité dégradée.
-        Nécessite `gs` (Ghostscript) installé.
+            combine-pdf rasterize FICHIER.pdf [-o SORTIE.pdf | -i]
+                                [--dpi N] [--quality Q]
+              Rastérise chaque page en JPEG plein page (via Ghostscript),
+              puis réembarque dans un nouveau PDF. Anti-extraction /
+              anti-falsification : plus de texte extractible, un filigrane
+              posé avant la rastérisation devient indissociable du contenu.
+              Pattern observé chez DossierFacile pour les RIB protégés.
+              Compromis : taille fichier en hausse, accessibilité dégradée.
+              Nécessite `gs` (Ghostscript) installé.
 
-    Sous-commandes historiques :
-      number FICHIER                Numérote les pages d'un PDF existant
-      merge FICHIER1 FICHIER2 ...   Concatène plusieurs PDF
-      assemble FICHIER1 FICHIER2 .. Merge + numérotation en une commande
+          Sous-commandes historiques :
+            number FICHIER                Numérote les pages d'un PDF existant
+            merge FICHIER1 FICHIER2 ...   Concatène plusieurs PDF
+            assemble FICHIER1 FICHIER2 .. Merge + numérotation en une commande
 
-    Signature (délègue au binaire `pdf-sign` de aloli-crystal/pdf-signature) :
-      sign -i IN -o OUT -c CERT.p12 -p VAR_ENV [-l b-lt] [-t URL_TSA] ...
-                                    Signe un PDF (PAdES B-B/B-T/B-LT/B-LTA).
-                                    La phrase de passe est le NOM d'une
-                                    variable d'env, jamais sa valeur.
-      verify SIGNE.pdf [-a CA.pem]  Vérifie les signatures d'un PDF.
-                                    Tous les drapeaux après `sign`/`verify`
-                                    sont passés tels quels à `pdfsig`.
+          Signature (délègue au binaire `pdf-sign` de aloli-crystal/pdf-signature) :
+            sign -i IN -o OUT -c CERT.p12 -p VAR_ENV [-l b-lt] [-t URL_TSA] ...
+                                          Signe un PDF (PAdES B-B/B-T/B-LT/B-LTA).
+                                          La phrase de passe est le NOM d'une
+                                          variable d'env, jamais sa valeur.
+            verify SIGNE.pdf [-a CA.pem]  Vérifie les signatures d'un PDF.
+                                          Tous les drapeaux après `sign`/`verify`
+                                          sont passés tels quels à `pdfsig`.
 
-    Options :
-    BANNER
+          Options :
+          BANNER
 
         # Options communes init / refresh — triées alpha par long flag.
         # NB : l'ordre des `p.on` n'affecte que l'aide affichée. À
@@ -270,17 +270,15 @@ module CombinePDF
           init_options.paper_size = v
         end
         p.on("--profile=NAME", "Profil de défauts : booklet (défaut) | book | report | slides | minimal") do |v|
-          begin
-            # Quand --profile est explicite, on ré-applique les surcharges
-            # de la config user pour qu'elles l'emportent sur le profil.
-            init_options = user_loaded.overrides.call(
-              CombinePDF::ConfigInitializer.options_for_profile(v)
-            )
-            profile_explicit = true
-          rescue ex : ArgumentError
-            STDERR.puts "Erreur : #{ex.message}"
-            raise Halt.new(1)
-          end
+          # Quand --profile est explicite, on ré-applique les surcharges
+          # de la config user pour qu'elles l'emportent sur le profil.
+          init_options = user_loaded.overrides.call(
+            CombinePDF::ConfigInitializer.options_for_profile(v)
+          )
+          profile_explicit = true
+        rescue ex : ArgumentError
+          STDERR.puts "Erreur : #{ex.message}"
+          raise Halt.new(1)
         end
         p.on("--skip-header", "Omet entièrement la section header du YAML") do
           init_options.header_state = :omitted
@@ -453,7 +451,7 @@ module CombinePDF
           # section qui mentionne la sous-commande dans son titre ou son
           # premier paragraphe et on l'imprime, plus un rappel.
           target = sub.downcase
-          valid_subs = %w(init refresh build compress gs encrypt decrypt rasterize)
+          valid_subs = %w[init refresh build compress gs encrypt decrypt rasterize]
           unless valid_subs.includes?(target)
             STDERR.puts "Aide indisponible pour « #{sub} » (sous-commandes : #{valid_subs.join(", ")})."
             STDERR.puts "Utilisez `combine-pdf help` pour l'aide globale."

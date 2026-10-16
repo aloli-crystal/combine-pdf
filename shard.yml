@@ -1,5 +1,5 @@
 name: combine-pdf
-version: 1.0.31.46
+version: 1.0.31.47
 
 description: |
   ISO-compatible Crystal port of the Ruby gem `combine_pdf` v1.0.31
@@ -43,7 +43,7 @@ dependencies:
 development_dependencies:
   ameba:
     github: crystal-ameba/ameba
-    version: "~> 1.6"
+    version: "~> 1.7"
 
 targets:
   combine-pdf:
