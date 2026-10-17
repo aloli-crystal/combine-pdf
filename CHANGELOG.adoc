@@ -3,6 +3,59 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.48 — 2026-10-17
+
+=== Added
+
+* **Sous-commande `watermark`** : expose en standalone le même
+  moteur que la section `watermark:` du YAML de `build`, pour
+  filigraner un PDF à la volée sans passer par un livret.
+  Délègue à `Watermark.apply` du shard aloli-crystal/watermark
+  (déjà dépendance pour `build`).
++
+[source,bash]
+----
+combine-pdf watermark rib.pdf -t "CONFIDENTIEL" -o rib-wm.pdf
+combine-pdf watermark rib.pdf -t "..." -s tiled -i          # in-place
+combine-pdf watermark rib.pdf -t "..." --opacity 0.1 --rotation 30
+----
++
+Styles : diagonal (défaut), tiled, header, footer, center.
+Flags : `-t`/`--text`, `-s`/`--style`, `--opacity`, `--rotation`,
+`--wm-color R,G,B`, `--wm-font-size N`.
++
+Combiné avec `rasterize` → protection anti-falsification à la
+DossierFacile :
++
+[source,bash]
+----
+combine-pdf watermark rib.pdf -t "..." -s tiled -i
+combine-pdf rasterize rib.pdf -i
+----
+
+=== Fixed
+
+* **`combine-pdf help <sub>`** reconnaît désormais `merge`,
+  `assemble`, `number`, `watermark`, `sign` et `verify` dans
+  `valid_subs`. Avant, `combine-pdf help merge` affichait
+  « Aide indisponible pour « merge » » alors que la sous-commande
+  existait bel et bien (section « Sous-commandes historiques »
+  du banner). Le filtre d'aide est donc désormais cohérent avec
+  les sous-commandes réellement disponibles.
+
+=== Note
+
+* Pour un rendu correct du filigrane sur des PDFs sources dont
+  les `/Resources /Font` ne contiennent pas Helvetica (cas des
+  RIB Caisse d'Épargne et autres documents formulaires), il faut
+  **watermark >= 0.1.8** qui déclare `/Helvetica` dans les
+  Resources de la page avant d'injecter le stream. Les versions
+  antérieures émettent un stream qui référence une fonte non
+  déclarée → le viewer skip silencieusement et le filigrane
+  reste invisible. Contrainte conservée à `"~> 0.1.5"` pour
+  compatibilité, mais `shards update watermark` au préalable
+  est recommandé.
+
 == v1.0.31.47 — 2026-10-16
 
 === Changed

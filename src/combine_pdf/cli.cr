@@ -80,8 +80,18 @@ module CombinePDF
       mode_encrypt = false
       mode_decrypt = false
       mode_rasterize = false
+      mode_watermark = false
       recursive = false
       target_dir = "."
+
+      # ─── Drapeaux du mode `watermark` (shell-out interne au module
+      #     Watermark du shard aloli-crystal/watermark).
+      watermark_text = ""
+      watermark_style = "diagonal"
+      watermark_opacity = 0.15
+      watermark_color = "0.5,0.5,0.5"
+      watermark_font_size = 48
+      watermark_rotation : Float64? = nil
 
       # ─── Drapeaux du mode `compress` / `gs` / `encrypt` ───────────────
       compress_in_place = false
@@ -219,6 +229,17 @@ module CombinePDF
               Pattern observé chez DossierFacile pour les RIB protégés.
               Compromis : taille fichier en hausse, accessibilité dégradée.
               Nécessite `gs` (Ghostscript) installé.
+
+            combine-pdf watermark FICHIER.pdf -t TEXTE [-o SORTIE.pdf | -i]
+                                [-s STYLE] [--opacity O] [--rotation A]
+                                [--wm-color R,G,B] [--wm-font-size N]
+              Applique un filigrane de texte sur toutes les pages d'un PDF.
+              Style : diagonal (défaut), tiled, header, footer, center.
+              Pour une protection « indissociable », combiner avec
+              `rasterize` en post-traitement :
+                  combine-pdf watermark rib.pdf -t "..." -s tiled -i
+                  combine-pdf rasterize rib.pdf -i
+              Délègue à aloli-crystal/watermark.
 
           Sous-commandes historiques :
             number FICHIER                Numérote les pages d'un PDF existant
@@ -363,6 +384,15 @@ module CombinePDF
         end
 
         p.separator ""
+        p.separator "Options pour `watermark` — tri alpha :"
+        p.on("--opacity=O", "Opacité 0.0-1.0 (défaut : 0.15)") { |v| watermark_opacity = v.to_f }
+        p.on("--rotation=A", "Rotation en degrés (défaut : 45 pour diagonal/tiled, 0 ailleurs)") { |v| watermark_rotation = v.to_f }
+        p.on("-s STYLE", "--style=STYLE", "Style : diagonal (défaut) | tiled | header | footer | center") { |v| watermark_style = v }
+        p.on("-t TEXTE", "--text=TEXTE", "Texte du filigrane (obligatoire pour `watermark`)") { |v| watermark_text = v }
+        p.on("--wm-color=R,G,B", "Couleur RGB du filigrane 0.0-1.0 (défaut : 0.5,0.5,0.5)") { |v| watermark_color = v }
+        p.on("--wm-font-size=N", "Taille du filigrane (défaut : 48)") { |v| watermark_font_size = v.to_i }
+
+        p.separator ""
         p.separator "Options des sous-commandes historiques — tri alpha :"
         p.on("--color=R,G,B", "Couleur RGB du texte (défaut : 0.2,0.2,0.2)") { |v| color_str = v }
         p.on("--font-size=SIZE", "Taille de police (défaut : 10)") { |v| font_size = v.to_f }
@@ -436,6 +466,9 @@ module CombinePDF
         when "rasterize"
           mode_rasterize = true
           positional = positional[1..]
+        when "watermark"
+          mode_watermark = true
+          positional = positional[1..]
         when "help", "-h", "--help"
           # `help [sous-commande]` — UX standard. Sans argument c'est
           # l'aide globale (équivalent à --help). Avec argument on filtre
@@ -451,7 +484,13 @@ module CombinePDF
           # section qui mentionne la sous-commande dans son titre ou son
           # premier paragraphe et on l'imprime, plus un rappel.
           target = sub.downcase
-          valid_subs = %w[init refresh build compress gs encrypt decrypt rasterize]
+          # Sous-commandes principales + sous-commandes historiques
+          # (merge, assemble, number) + délégations (sign, verify →
+          # pdf-sign). Toute entrée listée ici doit avoir une section
+          # correspondante dans le banner pour que le filtre `help <sub>`
+          # trouve quelque chose à afficher.
+          valid_subs = %w[init refresh build compress gs encrypt decrypt rasterize watermark
+            merge assemble number sign verify]
           unless valid_subs.includes?(target)
             STDERR.puts "Aide indisponible pour « #{sub} » (sous-commandes : #{valid_subs.join(", ")})."
             STDERR.puts "Utilisez `combine-pdf help` pour l'aide globale."
@@ -811,6 +850,81 @@ module CombinePDF
         rescue ex : CombinePDF::Rasterizer::Error
           STDERR.puts "Erreur : #{ex.message}"
           return 1
+        rescue ex
+          STDERR.puts "Erreur : #{ex.message}"
+          return 1
+        end
+      end
+
+      # Mode watermark : applique un filigrane de texte sur toutes les
+      # pages d'un PDF. Délègue à `Watermark.apply` du shard
+      # aloli-crystal/watermark (déjà dans les dépendances pour l'usage
+      # dans `build`, ici exposé en sub-commande standalone).
+      if mode_watermark
+        if positional.empty?
+          STDERR.puts "Erreur : watermark nécessite un fichier d'entrée."
+          STDERR.puts "Usage : combine-pdf watermark FICHIER.pdf -t TEXTE [-o SORTIE.pdf | -i] [-s STYLE] [--opacity O] ..."
+          return 1
+        end
+        input = positional.first
+        unless File.exists?(input)
+          STDERR.puts "Erreur : fichier introuvable : #{input}"
+          return 1
+        end
+        if watermark_text.empty?
+          STDERR.puts "Erreur : watermark nécessite un texte (-t TEXTE ou --text=TEXTE)."
+          return 1
+        end
+
+        target_output = if compress_in_place
+                          # Réutilise le flag `-i`/`--in-place` partagé avec compress/rasterize.
+                          input
+                        elsif !output_path.empty?
+                          output_path
+                        else
+                          input.sub(/\.pdf$/i, "-watermarked.pdf")
+                        end
+
+        style_sym = case watermark_style.downcase
+                    when "diagonal" then Watermark::Style::Diagonal
+                    when "tiled"    then Watermark::Style::Tiled
+                    when "header"   then Watermark::Style::Header
+                    when "footer"   then Watermark::Style::Footer
+                    when "center"   then Watermark::Style::Center
+                    else
+                      STDERR.puts "Erreur : style inconnu « #{watermark_style} » " \
+                                  "(valides : diagonal, tiled, header, footer, center)."
+                      return 1
+                    end
+
+        color_parts = watermark_color.split(',').map(&.to_f)
+        unless color_parts.size == 3
+          STDERR.puts "Erreur : --wm-color attend R,G,B (3 flottants 0.0-1.0)."
+          return 1
+        end
+        color_tuple = {color_parts[0], color_parts[1], color_parts[2]}
+
+        default_rotation = (style_sym == Watermark::Style::Diagonal || style_sym == Watermark::Style::Tiled) ? 45.0 : 0.0
+        rot = (watermark_rotation || default_rotation).as(Float64)
+
+        wm_options = Watermark::Options.new(
+          font_size: watermark_font_size,
+          color: color_tuple,
+          opacity: watermark_opacity,
+          rotation: rot,
+          margin: 50,
+        )
+
+        begin
+          if compress_in_place
+            tmp = "#{input}.watermark.tmp.#{Process.pid}.pdf"
+            Watermark.apply(input, tmp, watermark_text, style_sym, wm_options)
+            File.rename(tmp, input)
+          else
+            Watermark.apply(input, target_output, watermark_text, style_sym, wm_options)
+          end
+          puts "Filigrane appliqué (#{watermark_style}) : #{target_output}"
+          return 0
         rescue ex
           STDERR.puts "Erreur : #{ex.message}"
           return 1
