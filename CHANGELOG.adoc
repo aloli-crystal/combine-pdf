@@ -3,6 +3,18 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.49 — 2026-10-17
+
+=== Changed
+
+* **Contrainte `watermark` bumpée de `~> 0.1.5` à `~> 0.1.8`.**
+  La note de la version 1.0.31.48 recommandait manuellement
+  `shards update watermark` ; maintenant que watermark 0.1.8 est
+  publiée (filigrane visible : `/Helvetica` déclaré dans les
+  Resources de la page), la contrainte force directement la bonne
+  version. `shards install` dans un repo qui dépend de
+  combine-pdf tirera watermark 0.1.8+ sans intervention manuelle.
+
 == v1.0.31.48 — 2026-10-17
 
 === Added

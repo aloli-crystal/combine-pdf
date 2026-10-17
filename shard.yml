@@ -1,5 +1,5 @@
 name: combine-pdf
-version: 1.0.31.48
+version: 1.0.31.49
 
 description: |
   ISO-compatible Crystal port of the Ruby gem `combine_pdf` v1.0.31
@@ -35,7 +35,7 @@ dependencies:
     version: "~> 1.20.2"
   watermark:
     github: aloli-crystal/watermark
-    version: "~> 0.1.5"
+    version: "~> 0.1.8"
   ghostscript:
     github: aloli-crystal/ghostscript
     version: "~> 0.1"
