@@ -1,5 +1,5 @@
 name: combine-pdf
-version: 1.0.31.49
+version: 1.0.31.50
 
 description: |
   ISO-compatible Crystal port of the Ruby gem `combine_pdf` v1.0.31
