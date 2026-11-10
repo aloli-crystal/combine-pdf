@@ -3,6 +3,18 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.51 — 2026-11-10
+
+=== Changed
+
+* **Contrainte `pdf` bumpée de `~> 1.20.2` à `~> 1.22.3`.**
+  pdf 1.22.3 implémente la **récupération automatique des PDFs à
+  xref décalée** (cas vécu : `combine-pdf merge` avalait
+  silencieusement un `anamnese--irlandaise--amazing-grace--simple.pdf`
+  mal formé dans un livret de messe 2026-11-11 — 17 pages au lieu
+  de 18, aucun warning). `shards install` tirera désormais
+  directement la version qui marche.
+
 == v1.0.31.49 — 2026-10-17
 
 === Changed
