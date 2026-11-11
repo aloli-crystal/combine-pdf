@@ -53,14 +53,43 @@ module CombinePDF
         raise "Aucun fichier actif dans la liste `files:` du YAML."
       end
 
-      # Vérifier l'existence sur disque
-      missing = active.map(&.path).reject { |p| File.exists?(File.join(@base_dir, p)) }
+      # Vérifier l'existence sur disque (fichiers réguliers uniquement ;
+      # les entrées spéciales blank/separator sont générées à la volée).
+      missing = active.select(&.regular?).map(&.path).reject { |p| File.exists?(File.join(@base_dir, p)) }
       unless missing.empty?
         raise "Fichiers introuvables dans #{@base_dir} : #{missing.join(", ")}"
       end
 
       output_path = File.join(@base_dir, @config.output)
 
+      # Génère les PDFs temporaires pour les entrées spéciales
+      # (blank / separator) et calcule le `path` effectif à utiliser
+      # par le reste du pipeline pour chaque entrée active. Les tmp
+      # files sont supprimés à la fin.
+      tmp_specials = [] of String
+      effective_paths = active.map do |entry|
+        if entry.regular?
+          File.join(@base_dir, entry.path)
+        else
+          tmp = generate_special_page(entry)
+          tmp_specials << tmp
+          tmp
+        end
+      end
+
+      build_with_paths(active, effective_paths, output_path)
+    ensure
+      tmp_specials.try &.each { |p| File.delete(p) if File.exists?(p) }
+    end
+
+    # Pipeline cœur, séparé pour clarté. `effective_paths[i]` est le
+    # chemin absolu du PDF à injecter pour `active[i]` (fichier source
+    # pour Regular, tmp file pour Blank/Separator).
+    private def build_with_paths(
+      active : Array(Config::FileEntry),
+      effective_paths : Array(String),
+      output_path : String,
+    ) : String
       # Validation préalable : tente d'ouvrir ET de matérialiser tous
       # les objets de chaque fichier pour repérer les rares cas où
       # `pdf` n'arrive pas à parser (PDF malformé, encryption non
@@ -74,8 +103,8 @@ module CombinePDF
       # plus tard pendant la fusion et donneraient un message
       # cryptique sans contexte de fichier.
       bad_files = [] of Tuple(String, String)
-      active.each do |entry|
-        full = File.join(@base_dir, entry.path)
+      active.each_with_index do |entry, i|
+        full = effective_paths[i]
         begin
           reader = ::PDF::Reader.open(full, password: password_for(entry))
           total_size = reader.@trailer["Size"]?.try(&.as?(::PDF::Objects::Number)).try(&.to_i64.to_i32) || 0
@@ -83,9 +112,9 @@ module CombinePDF
         rescue ex : ::PDF::EncryptedPdfError
           # Cas spécifique : PDF chiffré (RC4/AES). Message beaucoup
           # plus ciblé que le générique « Invalid header ».
-          bad_files << {entry.path, "chiffré — #{ex.message}"}
+          bad_files << {entry_display(entry), "chiffré — #{ex.message}"}
         rescue ex
-          bad_files << {entry.path, ex.message || "erreur inconnue"}
+          bad_files << {entry_display(entry), ex.message || "erreur inconnue"}
         end
       end
       unless bad_files.empty?
@@ -124,13 +153,12 @@ module CombinePDF
         # fichier (`entry.password` ou fallback global).
         merger = Merger.new
         merger.flatten_rotation = @flatten_rotation
-        active.each do |entry|
-          full = File.join(@base_dir, entry.path)
-          merger.add(full, password: password_for(entry))
+        active.each_with_index do |entry, i|
+          merger.add(effective_paths[i], password: password_for(entry))
         end
 
         if toc = @config.toc.try(&.page)
-          insert_toc_page(merger, active, toc)
+          insert_toc_page(merger, active, effective_paths, toc)
         end
 
         merger.save(tmp_merged)
@@ -139,9 +167,23 @@ module CombinePDF
         tmp_numbered = File.tempname("ccp-numbered", ".pdf")
         begin
           if @config.numbering.enabled
-            partitions = active.map { |entry| ::PDF::Reader.open(File.join(@base_dir, entry.path), password: password_for(entry)).page_count }
+            partitions = active.map_with_index do |entry, i|
+              ::PDF::Reader.open(effective_paths[i], password: password_for(entry)).page_count
+            end
             toc_pages = (@config.toc.try(&.page).try(&.enabled)) ? 1 : 0
-            AdvancedNumberer.new(@config, partitions, toc_pages).apply(tmp_merged, tmp_numbered)
+
+            # Pour les entrées spéciales avec number = Hide/Skip,
+            # calcule les plages de pages dans le document global
+            # (1-based PDF). Ces plages sont passées au numéroteur
+            # pour masquer le numéro (Hide) ou retirer les pages du
+            # total (Skip).
+            hidden_pages, uncounted_pages = compute_numbering_overrides(active, partitions, toc_pages)
+
+            AdvancedNumberer.new(
+              @config, partitions, toc_pages,
+              extra_hidden_pages: hidden_pages,
+              uncounted_pages: uncounted_pages,
+            ).apply(tmp_merged, tmp_numbered)
           else
             File.copy(tmp_merged, tmp_numbered)
           end
@@ -178,8 +220,12 @@ module CombinePDF
     # active et du nombre de pages de chaque fichier), génère le
     # content stream + annotations via TocBuilder, et insère la
     # page TOC en tête du merger.
+    #
+    # Filtre : les entrées sans titre bookmark (blank sans title) et
+    # celles marquées `number: skip` n'apparaissent pas au sommaire.
     private def insert_toc_page(merger : Merger,
                                 active : Array(Config::FileEntry),
+                                effective_paths : Array(String),
                                 _toc : Config::Toc::Page) : Nil
       # `merger.page_refs` à ce stade contient les références des
       # pages des partitions, dans l'ordre. Pour chaque entrée
@@ -187,11 +233,28 @@ module CombinePDF
       # référence du merger.
       entries = [] of TocBuilder::Entry
       cumulative = 0
-      active.each do |file_entry|
-        full = File.join(@base_dir, file_entry.path)
-        partition_pages = ::PDF::Reader.open(full, password: password_for(file_entry)).page_count
+      active.each_with_index do |file_entry, i|
+        partition_pages = ::PDF::Reader.open(effective_paths[i], password: password_for(file_entry)).page_count
+
+        # Skip pur : pas de bookmark (comme une cover).
+        if file_entry.number == Config::NumberMode::Skip
+          cumulative += partition_pages
+          next
+        end
+
+        # Entrées spéciales sans titre explicite ni texte dérivable :
+        # pas de bookmark (séparateur silencieux).
+        title = file_entry.display_title
+        if title.nil? || title.empty?
+          cumulative += partition_pages
+          next
+        end
+
         target_ref = merger.page_refs[cumulative]?
-        next unless target_ref
+        unless target_ref
+          cumulative += partition_pages
+          next
+        end
 
         # Numéro affiché : 1-based dans le livret final, en
         # tenant compte du décalage de la TOC (+1 page) et de
@@ -199,7 +262,7 @@ module CombinePDF
         displayed = compute_displayed_page_number(cumulative)
 
         entries << TocBuilder::Entry.new(
-          title: file_entry.display_title,
+          title: title,
           page_number: displayed,
           target_page_ref: target_ref,
         )
@@ -314,6 +377,92 @@ module CombinePDF
         permissions: effective_perms,
         encrypt_metadata: enc.encrypt_metadata,
       )
+    end
+
+    # Génère un PDF temporaire d'une page pour une entrée spéciale
+    # (blank / separator). Dimensions héritées de `paper_size`.
+    # Les séparateurs réutilisent le shard watermark (style Center)
+    # pour dessiner leur texte au milieu de la page.
+    private def generate_special_page(entry : Config::FileEntry) : String
+      width, height = Config.paper_dimensions(@config.paper_size)
+      tmp_blank = File.tempname("ccp-special-blank", ".pdf")
+      blank = ::PDF::Document.new
+      blank.page(width: width, height: height) { |_| }
+      blank.save(tmp_blank)
+
+      case entry.kind
+      when Config::Kind::Blank
+        tmp_blank
+      when Config::Kind::Separator
+        text = entry.separator_text || ""
+        if text.empty?
+          return tmp_blank
+        end
+        tmp_out = File.tempname("ccp-special-separator", ".pdf")
+        begin
+          options = Watermark::Options.new(
+            font_size: (entry.separator_font_size || default_separator_font_size(width)).to_i,
+            color: entry.separator_color || {0.3, 0.3, 0.3},
+            opacity: entry.separator_opacity || 0.35,
+            rotation: 0.0,
+          )
+          Watermark.apply(tmp_blank, tmp_out, text, Watermark::Style::Center, options)
+          tmp_out
+        ensure
+          File.delete(tmp_blank) if File.exists?(tmp_blank)
+        end
+      else
+        tmp_blank
+      end
+    end
+
+    # Taille de police par défaut d'un séparateur : adaptée à la
+    # largeur de page pour que le texte soit visible mais discret.
+    private def default_separator_font_size(page_width : Float64) : Float64
+      # 24pt sur A4 portrait (595pt) ; mise à l'échelle linéaire.
+      (page_width * 24.0 / 595.0).round
+    end
+
+    # Libellé lisible pour les messages d'erreur. Pour une entrée
+    # spéciale, on affiche le mot-clé plutôt qu'un path vide.
+    private def entry_display(entry : Config::FileEntry) : String
+      case entry.kind
+      when Config::Kind::Blank     then "<blank>"
+      when Config::Kind::Separator then "<separator: #{entry.separator_text || entry.title || "?"}>"
+      else                              entry.path
+      end
+    end
+
+    # Calcule les listes `hidden_pages` et `uncounted_pages` à
+    # transmettre au numéroteur, en fonction des entrées `blank` /
+    # `separator` avec `number: hide` ou `number: skip`.
+    #
+    # Résultats 1-based dans la numérotation PDF brute, incluant la
+    # TOC éventuelle en tête. Les entrées regular ne contribuent
+    # jamais (on ne masque pas un fichier utilisateur).
+    private def compute_numbering_overrides(
+      active : Array(Config::FileEntry),
+      partitions : Array(Int32),
+      toc_pages : Int32,
+    ) : Tuple(Array(Int32), Array(Int32))
+      hidden = [] of Int32
+      uncounted = [] of Int32
+      offset = toc_pages # première page PDF brute après la TOC = offset + 1
+      active.each_with_index do |entry, i|
+        pages = partitions[i]
+        if entry.special?
+          case entry.number
+          when Config::NumberMode::Hide
+            pages.times { |k| hidden << (offset + k + 1) }
+          when Config::NumberMode::Skip
+            pages.times { |k| uncounted << (offset + k + 1) }
+          else
+            # Show → rien à masquer
+          end
+        end
+        offset += pages
+      end
+      {hidden, uncounted}
     end
 
     private def apply_watermark(input : String, output : String, wm : Config::Watermark) : Nil

@@ -222,6 +222,15 @@ module CombinePDF
     # On s'arrête à la première ligne non-vide, non-commentaire, qui
     # n'a pas la forme d'une entrée de tableau (= début de la section
     # suivante du YAML).
+    #
+    # Entrées spéciales reconnues par mot-clé :
+    # * `- blank`              — page vierge
+    # * `- separator`          — page intercalaire texte centré
+    #
+    # Chacune accepte les trois formes : nue, scalaire (`- blank:
+    # "Prélude"`), flow (`- blank: {title: "Prélude", number: hide}`)
+    # et block multi-ligne via consommation des lignes indentées
+    # suivantes.
     def parse_files_textually(raw : String) : Array(Config::FileEntry)
       lines = raw.lines
       files_idx = lines.index(&.starts_with?("files:"))
@@ -240,21 +249,35 @@ module CombinePDF
 
         # Entrée active : `  - foo.pdf` ou `  - foo.pdf: "Titre"`
         # ou inline mapping `- {path: foo.pdf, password: "x"}`
-        if md = line.match(/^\s*-\s+(.+)$/)
-          path, title, password = parse_entry_body(md[1])
-          entries << Config::FileEntry.new(path: path, title: title, excluded: false, password: password)
+        if md = line.match(/^(\s*)-\s+(.+?)\s*$/)
+          dash_indent = md[1].size
+          body = md[2]
+
+          # Forme block multi-ligne pour les mots-clés spéciaux :
+          # `- blank:` ou `- separator:` sans valeur après `:`, suivis
+          # de lignes indentées plus profondément.
+          if block_md = body.match(/^(blank|separator)\s*:\s*(?:#.*)?$/)
+            keyword = block_md[1]
+            consumed, reconstructed = consume_block_body(lines, idx + 1, dash_indent)
+            options = reconstructed.empty? ? Hash(YAML::Any, YAML::Any).new : (YAML.parse(reconstructed).as_h? || Hash(YAML::Any, YAML::Any).new)
+            entries << build_special_entry(keyword, options, excluded: false)
+            idx += 1 + consumed
+            next
+          end
+
+          entries << parse_entry_body(body, excluded: false)
           idx += 1
           next
         end
 
         # Entrée commentée : `  # - foo.pdf` ou `# - foo.pdf: "Titre"`
-        if md = line.match(/^\s*#\s*-\s+(.+)$/)
-          path, title, password = parse_entry_body(md[1])
+        if md = line.match(/^\s*#\s*-\s+(.+?)\s*$/)
+          body = md[1]
           # Ne pas confondre avec un commentaire libre qui contient un
-          # tiret. Heuristique : `path` doit ressembler à un nom de
-          # fichier (extension ou contient `/` ou `.`).
-          if looks_like_path?(path)
-            entries << Config::FileEntry.new(path: path, title: title, excluded: true, password: password)
+          # tiret. On accepte si le body ressemble à un path OU est
+          # une entrée spéciale (blank/separator).
+          if looks_like_entry_body?(body)
+            entries << parse_entry_body(body, excluded: true)
           end
           idx += 1
           next
@@ -274,15 +297,53 @@ module CombinePDF
       entries
     end
 
+    # Après une ligne d'ouverture `- blank:` (ou `- separator:`) à
+    # l'indentation `dash_indent`, consomme les lignes suivantes qui
+    # sont indentées plus profondément (= body YAML du mot-clé).
+    # S'arrête à la première ligne vide, commentaire, nouveau `- …`
+    # ou ligne moins indentée. Renvoie le nombre de lignes consommées
+    # et le body ré-indenté à zéro pour parser YAML.
+    private def consume_block_body(
+      lines : Array(String),
+      start_idx : Int32,
+      dash_indent : Int32,
+    ) : Tuple(Int32, String)
+      body_lines = [] of String
+      i = start_idx
+      min_child_indent = nil
+      while i < lines.size
+        l = lines[i].chomp
+        ls = l.strip
+        break if ls.empty?
+        break if ls.starts_with?("#")
+        leading = (l.match(/^(\s*)/) || return {i - start_idx, body_lines.join("\n")})[1].size
+        break if leading <= dash_indent
+        break if ls.starts_with?("- ")
+        min_child_indent = leading if min_child_indent.nil? || leading < min_child_indent
+        body_lines << l
+        i += 1
+      end
+      # Ré-indentation : on retire le préfixe commun pour que le
+      # parser YAML voie un mapping au niveau 0 en block standard.
+      shift = min_child_indent || 0
+      dedented = body_lines.map { |ln| ln.size > shift ? ln[shift..] : ln.lstrip }
+      {i - start_idx, dedented.join("\n")}
+    end
+
     # Décompose le corps d'une entrée du tableau `files:` en
-    # `{path, title, password}`.
+    # `Config::FileEntry`.
     #
-    # Trois formes acceptées :
+    # Formes acceptées :
     #
     # ```
-    # - foo.pdf                                    # path nu
-    # - foo.pdf: "Titre"                           # path + titre
-    # - {path: foo.pdf, title: "T", password: "p"} # inline mapping YAML
+    # - foo.pdf                                        # path nu
+    # - foo.pdf: "Titre"                               # path + titre
+    # - {path: foo.pdf, title: "T", password: "p"}     # inline mapping YAML
+    # - blank                                          # page vierge
+    # - blank: "Prélude"                               # vierge + title bookmark
+    # - blank: {title: "Prélude", number: hide}        # vierge + options flow
+    # - separator: "Chant 1"                           # intercalaire + texte
+    # - separator: {text: "...", title: "...", ...}    # intercalaire + options
     # ```
     #
     # L'inline mapping accepte plusieurs alias pour la lisibilité :
@@ -291,21 +352,35 @@ module CombinePDF
     # Si le chemin lui-même est entre guillemets (utile pour les noms
     # à espaces ou caractères spéciaux), on les retire — comportement
     # cohérent avec le parseur YAML standard.
-    private def parse_entry_body(body : String) : Tuple(String, String?, String?)
+    private def parse_entry_body(
+      body : String,
+      *,
+      excluded : Bool = false,
+    ) : Config::FileEntry
       body = body.rstrip
+
+      # Mot-clé spécial seul : `- blank` ou `- separator`.
+      if body == "blank" || body == "separator"
+        return build_special_entry(body, Hash(YAML::Any, YAML::Any).new, excluded: excluded)
+      end
+
+      # Mot-clé spécial + valeur : `- blank: "..."` ou `- separator: {...}`.
+      if md = body.match(/^(blank|separator)\s*:\s*(.+)$/)
+        return parse_special_body(md[1], md[2].strip, excluded: excluded)
+      end
 
       # Forme inline mapping `{path: x, title: "Y", password: "Z"}`.
       # Délégué au parseur YAML standard pour gérer guillemets,
       # échappements, types, etc.
       if body.starts_with?('{') && body.ends_with?('}')
-        return parse_inline_mapping(body)
+        path, title, password = parse_inline_mapping(body)
+        return Config::FileEntry.new(path: path, title: title, excluded: excluded, password: password)
       end
 
       # Détecte un chemin cité : `"..."` ou `'...'` éventuellement
       # suivi de `: titre`.
       if body.starts_with?('"') || body.starts_with?('\'')
         quote = body[0]
-        # Cherche le guillemet fermant correspondant
         i = 1
         while i < body.size
           break if body[i] == quote
@@ -314,12 +389,12 @@ module CombinePDF
         if i < body.size
           path = body[1, i - 1]
           rest = body[(i + 1)..].strip
+          title = nil
           if rest.starts_with?(':')
-            title_raw = rest[1..].strip
-            title_raw = strip_quotes(title_raw)
-            return {path, title_raw.empty? ? nil : title_raw, nil}
+            title_raw = strip_quotes(rest[1..].strip)
+            title = title_raw.empty? ? nil : title_raw
           end
-          return {path, nil, nil}
+          return Config::FileEntry.new(path: path, title: title, excluded: excluded)
         end
       end
 
@@ -329,9 +404,117 @@ module CombinePDF
         path = body[0, i].strip
         rest = body[(i + 1)..].strip
         rest = strip_quotes(rest)
-        {path, rest.empty? ? nil : rest, nil}
+        Config::FileEntry.new(path: path, title: rest.empty? ? nil : rest, excluded: excluded)
       else
-        {body.strip, nil, nil}
+        Config::FileEntry.new(path: body.strip, excluded: excluded)
+      end
+    end
+
+    # Parse le body d'une entrée spéciale après le mot-clé, ligne
+    # unique. `rest` = ce qui suit `blank:` ou `separator:`, strip.
+    # Deux formes : flow YAML `{...}` et scalaire (= title pour blank,
+    # = text pour separator).
+    private def parse_special_body(
+      keyword : String,
+      rest : String,
+      *,
+      excluded : Bool,
+    ) : Config::FileEntry
+      if rest.empty?
+        return build_special_entry(keyword, Hash(YAML::Any, YAML::Any).new, excluded: excluded)
+      end
+
+      # Forme flow YAML `{...}`
+      if rest.starts_with?('{') && rest.ends_with?('}')
+        options = YAML.parse(rest).as_h? || Hash(YAML::Any, YAML::Any).new
+        return build_special_entry(keyword, options, excluded: excluded)
+      end
+
+      # Scalaire : title pour blank, text pour separator.
+      scalar = strip_quotes(rest)
+      options = Hash(YAML::Any, YAML::Any).new
+      key = keyword == "blank" ? "title" : "text"
+      options[YAML::Any.new(key)] = YAML::Any.new(scalar)
+      build_special_entry(keyword, options, excluded: excluded)
+    end
+
+    # Construit un `Config::FileEntry` pour une entrée spéciale
+    # (blank / separator) à partir d'un mapping YAML d'options.
+    # Clés reconnues : `title`, `text` (separator), `number`
+    # (show/hide/skip), `font_size`, `opacity`, `color`.
+    private def build_special_entry(
+      keyword : String,
+      opts : Hash(YAML::Any, YAML::Any),
+      *,
+      excluded : Bool,
+    ) : Config::FileEntry
+      kind = keyword == "blank" ? Config::Kind::Blank : Config::Kind::Separator
+      title = yaml_str(opts, "title")
+      text = yaml_str(opts, "text")
+      number = parse_number_mode(opts[YAML::Any.new("number")]?)
+      fs = yaml_float(opts, "font_size")
+      op = yaml_float(opts, "opacity")
+      color = parse_color_any(opts[YAML::Any.new("color")]?)
+
+      Config::FileEntry.new(
+        path: "",
+        title: title,
+        excluded: excluded,
+        kind: kind,
+        number: number,
+        separator_text: kind == Config::Kind::Separator ? text : nil,
+        separator_font_size: fs,
+        separator_opacity: op,
+        separator_color: color,
+      )
+    end
+
+    private def yaml_str(opts : Hash(YAML::Any, YAML::Any), key : String) : String?
+      node = opts[YAML::Any.new(key)]?
+      return nil unless node
+      node.as_s?
+    end
+
+    private def yaml_float(opts : Hash(YAML::Any, YAML::Any), key : String) : Float64?
+      node = opts[YAML::Any.new(key)]?
+      return nil unless node
+      if v = node.as_f?
+        v
+      elsif v = node.as_i?
+        v.to_f
+      else
+        nil
+      end
+    end
+
+    private def parse_number_mode(node : YAML::Any?) : Config::NumberMode
+      return Config::NumberMode::Show unless node
+      str = node.as_s? || return Config::NumberMode::Show
+      case str.downcase
+      when "show" then Config::NumberMode::Show
+      when "hide" then Config::NumberMode::Hide
+      when "skip" then Config::NumberMode::Skip
+      else             Config::NumberMode::Show
+      end
+    end
+
+    # Variante sur-un-coup de `parse_color` qui accepte un `YAML::Any`
+    # et renvoie `nil` au lieu d'une valeur par défaut.
+    private def parse_color_any(node : YAML::Any?) : Tuple(Float64, Float64, Float64)?
+      return nil unless node
+      str = node.as_s?
+      return nil unless str
+      str = str.strip
+      if str.starts_with?("#") && str.size == 7
+        r = str[1, 2].to_i(16) / 255.0
+        g = str[3, 2].to_i(16) / 255.0
+        b = str[5, 2].to_i(16) / 255.0
+        {r, g, b}
+      else
+        parts = str.split(",").map(&.strip.to_f?)
+        if parts.size == 3 && parts.all?
+          {parts[0].not_nil!, parts[1].not_nil!, parts[2].not_nil!}
+        end
       end
     end
 
@@ -378,6 +561,15 @@ module CombinePDF
 
     private def looks_like_path?(s : String) : Bool
       s.includes?('/') || s.includes?('.')
+    end
+
+    # Reconnaît le body d'une entrée commentée (`# - …`) :
+    # un chemin de fichier OU un mot-clé spécial (blank / separator).
+    private def looks_like_entry_body?(body : String) : Bool
+      body = body.strip
+      return true if body == "blank" || body == "separator"
+      return true if body.match(/^(blank|separator)\s*:/)
+      looks_like_path?(body)
     end
   end
 end

@@ -3,6 +3,51 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.52 — 2026-11-11
+
+=== Added
+
+* **Entrées spéciales `- blank` et `- separator` dans la section
+  `files:`** du `.combine-pdf.yml`. Insèrent respectivement une
+  page vierge ou une page intercalaire texte centré, sans qu'il
+  faille maintenir des PDF fichiers dédiés. Dimensions héritées du
+  `paper_size` global. Trois formes YAML acceptées :
++
+--
+[source,yaml]
+----
+files:
+  - introduction.pdf
+  - blank                                                # A4, numérotée
+  - blank: "Prélude"                                     # + bookmark
+  - blank: {title: "Prélude", number: hide}              # flow + options
+  - chapitre-1.pdf
+  - separator: "Page intentionnellement blanche"         # texte centré
+  - separator: {text: "Fin", title: "Épilogue", number: skip}
+  - chapitre-2.pdf
+----
+--
+* **Contrôle fin de la numérotation `number: show | hide | skip`**
+  pour les entrées spéciales :
++
+--
+* `show` (défaut) — la page est visible (numéro dessiné) et comptée
+  dans le total du livret.
+* `hide` — la page est comptée dans le total mais le numéro n'est
+  pas dessiné dessus (invariant `N/T` pour les voisines
+  préservé).
+* `skip` — la page n'est NI comptée NI numérotée, comme une
+  couverture. Ni bookmark ni entrée au sommaire.
+--
+* **Séparateur paramétrable** (options du bloc `separator:`) :
+  `text` (obligatoire — scalaire équivalent pour la forme courte),
+  `title` (bookmark), `font_size`, `opacity`, `color`. Rendu via le
+  shard `watermark` (style `Center`), horizontal, gris pâle par
+  défaut.
+* Spec de non-régression `spec/special_entries_spec.cr` : 10 cas
+  couvrant les 4 formes YAML (nu / scalaire / flow / block
+  multi-ligne), l'exclusion `# - ` et le pipeline complet.
+
 == v1.0.31.51 — 2026-11-10
 
 === Changed

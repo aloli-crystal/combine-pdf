@@ -88,12 +88,44 @@ module CombinePDF
       end
     end
 
+    # Nature d'une entrée du tableau `files:`.
+    #
+    # * `Regular`   — fichier PDF à inclure tel quel.
+    # * `Blank`     — page vierge générée à la volée (dimensions
+    #                 héritées de `paper_size`). Titre bookmark
+    #                 optionnel.
+    # * `Separator` — page intercalaire générée à la volée qui porte
+    #                 son propre texte en gros au centre (type
+    #                 « Page intentionnellement blanche »).
+    #                 Indépendant du filigrane global.
+    enum Kind
+      Regular
+      Blank
+      Separator
+    end
+
+    # Comportement numérotation d'une entrée :
+    #
+    # * `Show` (défaut) — la page est visible (numéro dessiné) et
+    #                     comptée dans le total du livret.
+    # * `Hide`          — la page est comptée dans le total mais le
+    #                     numéro n'est pas dessiné dessus.
+    # * `Skip`          — la page n'est ni comptée ni numérotée
+    #                     (comme une couverture).
+    enum NumberMode
+      Show
+      Hide
+      Skip
+    end
+
     # Une entrée du tableau `files:`.
     #
     # `path` : chemin relatif au dossier du `.combine-pdf.yml`.
+    #          Vide pour les entrées spéciales (blank / separator).
     # `title` : libellé personnalisé pour le bookmark / TOC. `nil` = on
     #           dérive du nom de fichier (tirets → espaces, sans
-    #           extension).
+    #           extension). Pour les entrées spéciales, `nil` = pas
+    #           de bookmark (séparateur sans titre).
     # `excluded` : `true` quand l'entrée est en commentaire dans le
     #              YAML (`# - foo.pdf`). Conservée pour que `--refresh`
     #              ne réintroduise pas un fichier que l'utilisateur a
@@ -103,19 +135,50 @@ module CombinePDF
     #              `Config#input_password` (global). Permet d'avoir
     #              plusieurs PDFs chiffrés avec des mots de passe
     #              différents dans un même livret.
+    # `kind` : type d'entrée (fichier normal, page vierge, séparateur).
+    # `number` : contrôle fin de la numérotation sur cette entrée.
+    # `separator_text` : texte dessiné au centre d'une entrée
+    #                    `Separator`. `nil` pour `Regular` et `Blank`.
+    # `separator_font_size`, `separator_opacity`, `separator_color` :
+    #    rendu du texte du séparateur. `nil` = valeurs par défaut.
     record FileEntry,
-      path : String,
+      path : String = "",
       title : String? = nil,
       excluded : Bool = false,
-      password : String? = nil do
+      password : String? = nil,
+      kind : Kind = Kind::Regular,
+      number : NumberMode = NumberMode::Show,
+      separator_text : String? = nil,
+      separator_font_size : Float64? = nil,
+      separator_opacity : Float64? = nil,
+      separator_color : Tuple(Float64, Float64, Float64)? = nil do
+      # `true` pour les entrées générées (blank / separator).
+      def special? : Bool
+        kind != Kind::Regular
+      end
+
+      # `true` pour les fichiers PDF ordinaires.
+      def regular? : Bool
+        kind == Kind::Regular
+      end
+
       # Libellé à afficher dans les bookmarks / TOC. Préfère `title`
-      # si défini, sinon dérive du nom de fichier.
-      def display_title : String
+      # explicite, sinon :
+      # * Regular   → dérive du nom de fichier
+      # * Blank     → `nil` (pas de bookmark par défaut)
+      # * Separator → retombe sur `separator_text`
+      def display_title : String?
         if t = @title
-          t
-        else
+          return t
+        end
+        case kind
+        when Kind::Regular
           base = File.basename(@path, File.extname(@path))
           base.tr("-_", "  ")
+        when Kind::Separator
+          @separator_text
+        else
+          nil
         end
       end
     end

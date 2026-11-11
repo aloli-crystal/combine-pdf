@@ -13,10 +13,31 @@ module CombinePDF
     @config : Config
     @partitions : Array(Int32)
     @toc_pages : Int32
+    @extra_hidden_pages : Array(Int32)
+    @uncounted_pages : Array(Int32)
 
     # `toc_pages` = nombre de pages de TOC insérées en tête (0 ou 1).
     # Ces pages sont JAMAIS numérotées et n'ont pas d'info partition.
-    def initialize(@config : Config, @partitions : Array(Int32), @toc_pages : Int32 = 0)
+    #
+    # `extra_hidden_pages` (1-based, numérotation PDF brute) :
+    #   pages pour lesquelles on NE dessine PAS le numéro global
+    #   mais qui comptent dans le total (ex. une page `blank` avec
+    #   `number: hide`). Équivalent à `skip_pages` du YAML mais
+    #   calculé par le builder à partir des entrées spéciales.
+    #
+    # `uncounted_pages` (1-based, numérotation PDF brute) :
+    #   pages qui ne comptent NI dans le total NI dans le compteur
+    #   de pages affiché (ex. une page `separator` avec `number: skip`
+    #   — comportement cover-like). Les numéros des pages suivantes
+    #   se décalent comme si ces pages n'existaient pas.
+    def initialize(
+      @config : Config,
+      @partitions : Array(Int32),
+      @toc_pages : Int32 = 0,
+      *,
+      @extra_hidden_pages : Array(Int32) = [] of Int32,
+      @uncounted_pages : Array(Int32) = [] of Int32,
+    )
     end
 
     def apply(input : String, output : String) : Nil
@@ -33,7 +54,8 @@ module CombinePDF
       cover = @config.cover
       front = cover.front_pages
       back = cover.back_pages
-      content_total = total - @toc_pages - front - back
+      uncounted_count = @uncounted_pages.size
+      content_total = total - @toc_pages - front - back - uncounted_count
       content_total = 0 if content_total < 0
 
       # Map 0-based page index → infos de partition (n_dans_partition, n_total_partition)
@@ -51,15 +73,24 @@ module CombinePDF
         is_front_cover = !is_toc && idx < (@toc_pages + front)
         is_back_cover = idx >= (total - back)
         is_cover = is_front_cover || is_back_cover
+        is_uncounted = @uncounted_pages.includes?(page_num_pdf)
+
+        # Pages uncounted : traitées comme des couvertures côté
+        # affichage ; n'incrémentent pas le compteur.
+        uncounted_before = @uncounted_pages.count { |p| p < page_num_pdf }
 
         # Numéro global affiché
         if is_toc
           show_global = false
           displayed_global = 0
           displayed_total = content_total
+        elsif is_uncounted
+          show_global = false
+          displayed_global = 0
+          displayed_total = content_total
         elsif @config.cover.include_in_numbering
-          displayed_global = idx - @toc_pages + 1
-          displayed_total = total - @toc_pages
+          displayed_global = idx - @toc_pages + 1 - uncounted_before
+          displayed_total = total - @toc_pages - uncounted_count
           show_global = true
         else
           if is_cover
@@ -67,7 +98,7 @@ module CombinePDF
             displayed_global = 0
             displayed_total = content_total
           else
-            displayed_global = idx - @toc_pages - front + 1 # 1-based dans le contenu
+            displayed_global = idx - @toc_pages - front + 1 - uncounted_before # 1-based dans le contenu
             displayed_total = content_total
             show_global = true
           end
@@ -75,6 +106,9 @@ module CombinePDF
 
         # Skip pages (1-based, basé sur la numérotation PDF brute)
         show_global = false if @config.numbering.skip_pages.includes?(page_num_pdf)
+        # Pages Hide spéciales (blank/separator avec `number: hide`) :
+        # comptent dans le total mais pas de numéro dessiné.
+        show_global = false if @extra_hidden_pages.includes?(page_num_pdf)
 
         # ─── Construction des couches
         layers = [] of Tuple(Float64, Float64, String, Config::Numbering::Layer, String)
@@ -90,8 +124,10 @@ module CombinePDF
           layers << {x, y, text, @config.numbering.global, "global"}
         end
 
-        # Couche partition (jamais sur les pages TOC ni couvertures)
-        if @config.numbering.partition.enabled && !is_cover && !is_toc
+        # Couche partition (jamais sur les pages TOC ni couvertures
+        # ni sur les pages blank/separator hide/skip).
+        is_hidden_special = @extra_hidden_pages.includes?(page_num_pdf)
+        if @config.numbering.partition.enabled && !is_cover && !is_toc && !is_uncounted && !is_hidden_special
           if pi = page_to_partition[idx]?
             part_n, part_total = pi
             unless @config.numbering.partition.hide_when_single && part_total <= 1
