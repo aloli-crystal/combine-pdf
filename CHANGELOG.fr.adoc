@@ -3,6 +3,63 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.53 — 2026-11-11
+
+=== Ajouté
+
+* **Page de manuel `combine-pdf(1)`** en anglais et en français,
+  livrée en source AsciiDoc et en troff pré-compilé :
++
+--
+* `man/combine-pdf.1.adoc` + `man/combine-pdf.1` (anglais, source
+  canonique).
+* `man/fr/combine-pdf.1.adoc` + `man/fr/combine-pdf.1` (français).
+--
++
+Les troffs sont commités pour que `man combine-pdf` fonctionne sur
+une machine sans asciidoctor installé.
+* **Aide CLI courte (~40 lignes) sous `--help` / `-h` / `help`**,
+  avec renvoi explicite vers `man combine-pdf`.
+* **`--help-full` / `-H`** conserve l'aide verbeuse historique
+  (compat ascendante pour les scripts).
+* Spec de non-régression `spec/manpage_spec.cr` (11 cas).
+
+=== Modifié
+
+* **README (EN + FR)** : nouvelle sous-section « Manual » / « Manuel »
+  dans Installation, avec les commandes d'installation sous
+  `/opt/homebrew/share/man/` et `/usr/local/share/man/`.
+* **README (EN + FR)** : la commande d'installation CLI passe de
+  `cp bin/combine-pdf ~/bin/` à `ln -s "$PWD/combine-pdf/bin/…"
+  ~/bin/combine-pdf` (convention aloli-crystal).
+* **Contrainte de version de combine-pdf** dans les deux READMEs :
+  `~> 1.0.31.47` → `~> 1.0.31.53`.
+
+== v1.0.31.52 — 2026-11-11
+
+=== Ajouté
+
+* **Entrées spéciales `- blank` et `- separator` dans la section
+  `files:`** du `.combine-pdf.yml`. Insèrent respectivement une
+  page vierge ou une page intercalaire texte centré, sans qu'il
+  faille maintenir de PDF dédié. Dimensions héritées du
+  `paper_size` global. Quatre formes YAML acceptées (nue,
+  scalaire, flow, block multi-ligne).
+* **Contrôle fin de la numérotation `number: show | hide | skip`**
+  pour les entrées spéciales :
++
+--
+* `show` (défaut) — comptée et numérotée.
+* `hide` — comptée mais pas de numéro dessiné (invariant `N/T`
+  préservé).
+* `skip` — ni comptée ni numérotée, comme une couverture. Pas de
+  signet dans le sommaire.
+--
+* **Séparateur paramétrable** (`text`, `title`, `font_size`,
+  `opacity`, `color`). Rendu via le shard `watermark` (style
+  `Center`).
+* Spec de non-régression `spec/special_entries_spec.cr` (10 cas).
+
 == v1.0.31.47 — 2026-10-16
 
 === Modifié

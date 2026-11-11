@@ -1,0 +1,676 @@
+'\" t
+.\"     Title: combine-pdf
+.\"    Author: Philippe Nénert
+.\" Generator: Asciidoctor 2.0.23
+.\"      Date: 2026-11-11
+.\"    Manual: COMBINE-PDF
+.\"    Source: COMBINE-PDF
+.\"  Language: English
+.\"
+.TH "COMBINE\-PDF" "1" "2026-11-11" "COMBINE\-PDF" "COMBINE\-PDF"
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.ss \n[.ss] 0
+.nh
+.ad l
+.de URL
+\fI\\$2\fP <\\$1>\\$3
+..
+.als MTO URL
+.if \n[.g] \{\
+.  mso www.tmac
+.  am URL
+.    ad l
+.  .
+.  am MTO
+.    ad l
+.  .
+.  LINKSTYLE blue R < >
+.\}
+.SH "NAME"
+combine-pdf \- assemble, number, watermark, compress, encrypt and sign PDF booklets
+.SH "SYNOPSIS"
+.sp
+\fBcombine\-pdf\fP [\fISUBCOMMAND\fP] [\fIOPTIONS\fP] [\fIFILES\fP...]
+.sp
+\fBcombine\-pdf\fP \f(CRinit\fP [\f(CR\-r\fP] [\f(CR\-\-profile\fP \fINAME\fP] [\fIinit\-options\fP...]
+.sp
+\fBcombine\-pdf\fP [\f(CRbuild\fP]
+.sp
+\fBcombine\-pdf\fP \f(CRrefresh\fP [\f(CR\-r\fP]
+.sp
+\fBcombine\-pdf\fP \f(CRcompress\fP \fIFILE.pdf\fP [\f(CR\-o\fP \fIOUT.pdf\fP | \f(CR\-i\fP] [\f(CR\-L\fP] [\f(CR\-\-deep\fP]
+.sp
+\fBcombine\-pdf\fP \f(CRencrypt\fP|\f(CRdecrypt\fP \fIFILE.pdf\fP [\f(CR\-o\fP \fIOUT.pdf\fP | \f(CR\-i\fP] [\f(CR\-u\fP \fIPWD\fP] [\f(CR\-l\fP \fILEVEL\fP]
+.sp
+\fBcombine\-pdf\fP \f(CRrasterize\fP|\f(CRwatermark\fP|\f(CRgs\fP \fIFILE.pdf\fP [\fIoptions\fP...]
+.sp
+\fBcombine\-pdf\fP \f(CRsign\fP|\f(CRverify\fP \fIargs\fP...   (forwarded to \f(CRpdf\-sign\fP)
+.sp
+\fBcombine\-pdf\fP \f(CRmerge\fP|\f(CRassemble\fP|\f(CRnumber\fP \fIFILES\fP... (historic subcommands)
+.SH "DESCRIPTION"
+.sp
+\fBcombine\-pdf\fP is the Crystal port of the Ruby gem \f(CRcombine_pdf\fP, extended
+into a declarative booklet builder. It reads a \fB.combine\-pdf.yml\fP file in
+the current directory and produces a single PDF that:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+concatenates every listed file (plus optional special pages: see
+\f(CRBLANK AND SEPARATOR ENTRIES\fP below);
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+prepends a cover page and a clickable table of contents;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+numbers pages globally and inside partitions, with cover\-like pages
+left uncounted;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+applies an optional diagonal/tiled/center text watermark;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+optionally encrypts the output (RC4\-128, AES\-128, AES\-256) and/or
+signs it (PAdES B\-B / B\-T / B\-LT / B\-LTA, via \f(CRpdf\-sign\fP).
+.RE
+.sp
+Without a subcommand, \fBcombine\-pdf\fP reads the YAML in the current
+directory and builds the booklet.  The produced PDF opens automatically
+in the system viewer when stdout and stderr are both interactive
+terminals (macOS \f(CRopen\fP, Linux/BSD \f(CRxdg\-open\fP); pass \f(CR\-\-no\-open\fP to
+disable this.
+.SH "COMMANDS"
+.sp
+\fBinit\fP [\f(CR\-r\fP] [options]
+.RS 4
+Create a \fB.combine\-pdf.yml\fP in the current directory, prefilled with
+the PDFs found there.  \f(CR\-r\fP/\f(CR\-\-recursive\fP lists PDFs in subdirectories
+too.
+.RE
+.sp
+\fBbuild\fP (or no subcommand)
+.RS 4
+Read the local YAML and produce the booklet.
+.RE
+.sp
+\fBrefresh\fP [\f(CR\-r\fP]
+.RS 4
+Update the \f(CRfiles:\fP section of the YAML: append new PDFs at the end,
+comment out entries whose file has disappeared.  Preserves comments,
+order and titles.
+.RE
+.sp
+\fBcompress\fP \fIFILE\fP [\f(CR\-o\fP \fIOUT\fP | \f(CR\-i\fP] [\f(CR\-L\fP] [\f(CR\-\-deep\fP]
+.RS 4
+Shrink a single PDF through uniform Flate recompression and
+orphan\-object garbage collection (typical gain 30\-80%).
+\f(CR\-L\fP/\f(CR\-\-linearize\fP enables Fast Web View (ISO 32000\-1 § F) and
+requires \fBqpdf\fP.  \f(CR\-\-deep\fP adds image downsampling via Ghostscript
+(requires \fBgs\fP).
+.RE
+.sp
+\fBgs\fP \fIFILE\fP
+.RS 4
+Normalise a PDF through Ghostscript.  Use when the internal parser
+refuses a malformed PDF (e.g. legacy linearised Acrobat files with
+invalid zlib streams).
+.RE
+.sp
+\fBencrypt\fP \fIFILE\fP [\f(CR\-l\fP \fILEVEL\fP] [\f(CR\-u\fP \fIUSER_PWD\fP] [\f(CR\-w\fP \fIOWNER_PWD\fP]
+.RS 4
+Encrypt a PDF (Standard Security Handler).  \fILEVEL\fP is one of
+\f(CRrc4_128\fP, \f(CRaes_128\fP, \f(CRaes_256\fP (default).
+.RE
+.sp
+\fBdecrypt\fP \fIFILE\fP [\f(CR\-u\fP \fIPWD\fP]
+.RS 4
+Strip the \f(CR/Encrypt\fP dictionary from a PDF.  An empty password is
+used by default, which works for "owner\-only" protected files.
+.RE
+.sp
+\fBrasterize\fP \fIFILE\fP [\f(CR\-\-dpi\fP \fIN\fP] [\f(CR\-\-quality\fP \fIQ\fP]
+.RS 4
+Render each page to a full\-page JPEG via Ghostscript and re\-embed it
+in a new PDF.  Anti\-extraction / anti\-tampering trade\-off: no more
+extractable text, larger files, degraded accessibility.
+.RE
+.sp
+\fBwatermark\fP \fIFILE\fP \f(CR\-t\fP \fITEXT\fP [\f(CR\-s\fP \fISTYLE\fP]
+.RS 4
+Overlay a text watermark on every page.  \fISTYLE\fP is one of \f(CRdiagonal\fP
+(default), \f(CRtiled\fP, \f(CRheader\fP, \f(CRfooter\fP, \f(CRcenter\fP.
+.RE
+.sp
+\fBsign\fP \f(CR\-i\fP \fIIN\fP \f(CR\-o\fP \fIOUT\fP \f(CR\-c\fP \fICERT.p12\fP \f(CR\-p\fP \fIENV_VAR\fP [...], \fBverify\fP \fISIGNED.pdf\fP [\f(CR\-a\fP \fICA.pem\fP]
+.RS 4
+Thin forwarders to \f(CRpdf\-sign\fP (shard \fBaloli\-crystal/pdf\-signature\fP).
+The signing passphrase is passed as the \fBname\fP of an environment
+variable, never its value.
+.RE
+.sp
+\fBmerge\fP \fIFILE1\fP \fIFILE2\fP ...
+.RS 4
+Concatenate PDFs into \f(CRmerged.pdf\fP (or \f(CR\-o\fP \fIOUT\fP).
+.RE
+.sp
+\fBassemble\fP \fIFILE1\fP \fIFILE2\fP ...
+.RS 4
+Merge + automatic numbering in one shot (CLI equivalent of the YAML
+booklet workflow).
+.RE
+.sp
+\fBnumber\fP \fIFILE\fP
+.RS 4
+Number the pages of an existing PDF.
+.RE
+.sp
+\fBhelp\fP [\fISUBCOMMAND\fP]
+.RS 4
+Print the short help; with a subcommand, show the matching section
+of the full help.
+.RE
+.SH "OPTIONS"
+.SS "Global"
+.sp
+\f(CR\-d\fP \fIDIR\fP, `\-\-dir=`\fIDIR\fP
+.RS 4
+Target directory (default: \f(CR.\fP).
+.RE
+.sp
+\f(CR\-r\fP, \f(CR\-\-recursive\fP
+.RS 4
+Recursive mode for \f(CRinit\fP and \f(CRrefresh\fP.
+.RE
+.sp
+\f(CR\-R\fP, \f(CR\-\-no\-flatten\-rotation\fP
+.RS 4
+Disable qpdf\(cqs \f(CR\-\-flatten\-rotation\fP pre\-processing of source PDFs
+whose pages carry \f(CR/Rotate\fP ≠ 0 (macOS Preview case).
+.RE
+.sp
+\f(CR\-\-no\-open\fP
+.RS 4
+Never open the produced PDF in the system viewer after \f(CRbuild\fP.
+.RE
+.sp
+\f(CR\-h\fP, \f(CR\-\-help\fP
+.RS 4
+Print the short help.
+.RE
+.sp
+\f(CR\-v\fP, \f(CR\-\-version\fP
+.RS 4
+Print the version.
+.RE
+.SS "init options"
+.sp
+`\-\-profile=`\fINAME\fP
+.RS 4
+One of \f(CRbooklet\fP (default), \f(CRbook\fP, \f(CRreport\fP, \f(CRslides\fP, \f(CRminimal\fP.
+.RE
+.sp
+`\-\-author=`\fITEXT\fP
+.RS 4
+Override the author (default: \f(CRgit config user.name\fP).
+.RE
+.sp
+`\-\-title=`\fITEXT\fP
+.RS 4
+Override the title (default: directory name).
+.RE
+.sp
+`\-\-paper\-size=`\fISIZE\fP
+.RS 4
+\f(CRa4\fP (default), \f(CRletter\fP, \f(CRlegal\fP, \f(CRa3\fP, \f(CRa5\fP, \f(CRb5\fP, \f(CRexecutive\fP, or
+\f(CRWxH\fP in points.
+.RE
+.sp
+`\-\-cover=`\fIMODE\fP
+.RS 4
+\f(CRnone\fP (default), \f(CRrecto\fP, or \f(CRrecto\-verso\fP.
+.RE
+.sp
+\f(CR\-\-duplex\fP
+.RS 4
+Generate \f(CRduplex: true\fP in the YAML.
+.RE
+.sp
+\f(CR\-\-header\fP
+.RS 4
+Enable the partition header (per\-file title at the top of each page).
+.RE
+.sp
+\f(CR\-\-toc\fP
+.RS 4
+Enable the title page and clickable table of contents.
+.RE
+.sp
+`\-\-watermark=`\fITEXT\fP
+.RS 4
+Enable the watermark section with this text.
+.RE
+.sp
+\f(CR\-\-no\-numbering\fP
+.RS 4
+Disable all numbering (\f(CRnumbering.enabled: false\fP).
+.RE
+.sp
+`\-\-init\-format=`\fIFMT\fP
+.RS 4
+Override the global numbering format (default: \f(CR• %page% / %total% •\fP).
+.RE
+.sp
+`\-\-init\-output=`\fIFILE\fP
+.RS 4
+Override the output PDF filename.
+.RE
+.sp
+\f(CR\-\-skip\-header\fP, \f(CR\-\-skip\-toc\fP, \f(CR\-\-skip\-watermark\fP
+.RS 4
+Omit the corresponding section entirely from the generated YAML.
+.RE
+.sp
+`\-\-user\-config=`\fIPATH\fP
+.RS 4
+Path to the user\-level config (default: \f(CR$XDG_CONFIG_HOME/combine\-pdf/config.yml\fP).
+.RE
+.SS "compress options"
+.sp
+\f(CR\-i\fP, \f(CR\-\-in\-place\fP
+.RS 4
+Overwrite the input file atomically through a `.tmp.`\fIPID\fP file.
+.RE
+.sp
+\f(CR\-\-backup\fP
+.RS 4
+Keep the original as \f(CR.bak\fP when combined with \f(CR\-i\fP.
+.RE
+.sp
+\f(CR\-L\fP, \f(CR\-\-linearize\fP
+.RS 4
+Enable Fast Web View (ISO 32000\-1 § F).  Requires \fBqpdf\fP.  Do NOT
+combine with a PAdES\-signed PDF.
+.RE
+.sp
+\f(CR\-\-deep\fP
+.RS 4
+Deep compression through Ghostscript (image downsampling, JPEG,
+fonts).  Requires \fBgs\fP.
+.RE
+.sp
+`\-\-deep\-quality=`\fIQ\fP
+.RS 4
+Ghostscript preset: \f(CRscreen\fP, \f(CRebook\fP (default), \f(CRprinter\fP, \f(CRprepress\fP.
+.RE
+.SS "encrypt options"
+.sp
+\f(CR\-l\fP \fILEVEL\fP, `\-\-level=`\fILEVEL\fP
+.RS 4
+\f(CRrc4_128\fP, \f(CRaes_128\fP, or \f(CRaes_256\fP (default).
+.RE
+.sp
+\f(CR\-u\fP \fIPWD\fP, `\-\-user\-password=`\fIPWD\fP
+.RS 4
+User password (empty: no open password, owner\-only restrictions).
+.RE
+.sp
+\f(CR\-w\fP \fIPWD\fP, `\-\-owner\-password=`\fIPWD\fP
+.RS 4
+Owner password (default: same as user password).
+.RE
+.sp
+\f(CR\-p\fP \fILIST\fP, `\-\-permissions=`\fILIST\fP
+.RS 4
+CSV of \f(CRprint\fP, \f(CRcopy\fP, \f(CRmodify\fP, \f(CRannotate\fP, or \f(CRnone\fP / \f(CRall\fP.
+.RE
+.sp
+\f(CR\-I\fP \fIPWD\fP, `\-\-input\-password=`\fIPWD\fP
+.RS 4
+Password to try on encrypted input PDFs (used by \f(CRbuild\fP and \f(CRdecrypt\fP).
+.RE
+.sp
+\f(CR\-\-encrypt\fP, \f(CR\-\-no\-encrypt\fP
+.RS 4
+Force encryption on/off during \f(CRbuild\fP, overriding the YAML.
+.RE
+.SS "rasterize options"
+.sp
+`\-\-dpi=`\fIN\fP
+.RS 4
+Rendering resolution in dpi (default: 200).  150 = screen, 300 =
+printable.
+.RE
+.sp
+`\-\-quality=`\fIQ\fP
+.RS 4
+JPEG quality 0\-100 (default: 85).
+.RE
+.SS "watermark options"
+.sp
+\f(CR\-t\fP \fITEXT\fP, `\-\-text=`\fITEXT\fP
+.RS 4
+Watermark text (required for \f(CRwatermark\fP).
+.RE
+.sp
+\f(CR\-s\fP \fISTYLE\fP, `\-\-style=`\fISTYLE\fP
+.RS 4
+\f(CRdiagonal\fP (default), \f(CRtiled\fP, \f(CRheader\fP, \f(CRfooter\fP, \f(CRcenter\fP.
+.RE
+.sp
+`\-\-opacity=`\fIO\fP
+.RS 4
+Opacity 0.0\-1.0 (default: 0.15).
+.RE
+.sp
+`\-\-rotation=`\fIA\fP
+.RS 4
+Rotation in degrees (default: 45 for diagonal/tiled, 0 otherwise).
+.RE
+.sp
+`\-\-wm\-color=`\fIR,G,B\fP
+.RS 4
+RGB watermark color 0.0\-1.0 (default: \f(CR0.5,0.5,0.5\fP).
+.RE
+.sp
+`\-\-wm\-font\-size=`\fIN\fP
+.RS 4
+Font size (default: 48).
+.RE
+.SS "Historic subcommand options (\f(CRmerge\fP / \f(CRassemble\fP / \f(CRnumber\fP)"
+.sp
+\f(CR\-o\fP \fIFILE\fP, `\-\-output=`\fIFILE\fP
+.RS 4
+Output file.
+.RE
+.sp
+`\-\-font\-size=`\fISIZE\fP
+.RS 4
+Text size (default: 10).
+.RE
+.sp
+`\-\-color=`\fIR,G,B\fP
+.RS 4
+RGB text color (default: \f(CR0.2,0.2,0.2\fP).
+.RE
+.sp
+`\-\-margin=`\fIPT\fP
+.RS 4
+Margin in points (default: 24).
+.RE
+.sp
+`\-\-global\-format=`\fIFMT\fP
+.RS 4
+Global numbering format (default: \f(CR%page%/%total%\fP).
+.RE
+.sp
+`\-\-partition\-format=`\fIFMT\fP
+.RS 4
+Intra\-partition format.
+.RE
+.sp
+`\-\-partitions=`\fILIST\fP
+.RS 4
+Comma\-separated sizes (e.g. \f(CR4,2,1\fP).
+.RE
+.sp
+`\-\-skip=`\fIPAGES\fP
+.RS 4
+1\-based page numbers not to number (comma\-separated).
+.RE
+.sp
+\f(CR\-\-show\-single\-partitions\fP
+.RS 4
+Show the intra\-partition number even for single\-page partitions.
+.RE
+.SH "CONFIGURATION"
+.sp
+A full \f(CR.combine\-pdf.yml\fP looks like this:
+.sp
+.if n .RS 4
+.nf
+.fam C
+output: booklet.pdf
+title: "My booklet"
+author: "Jane Doe"
+paper_size: a4
+duplex: false
+
+numbering:
+  enabled: true
+  global:
+    enabled: true
+    format: "• %page% / %total% •"
+
+toc:
+  enabled: true
+
+watermark:
+  enabled: false
+  text: "DRAFT"
+  style: diagonal
+  opacity: 0.15
+
+encrypt:
+  enabled: false
+  level: aes_256
+  user_password: ""
+  owner_password: ""
+  permissions: [print]
+
+files:
+  \- chapter\-1.pdf
+  \- chapter\-2.pdf
+.fam
+.fi
+.if n .RE
+.SS "BLANK AND SEPARATOR ENTRIES"
+.sp
+Since 1.0.31.52, the \f(CRfiles:\fP list accepts two reserved keywords
+alongside regular paths.
+.sp
+\f(CR\- blank\fP
+.RS 4
+Insert a blank page (A4 by default, or \f(CRpaper_size\fP).  Counted and
+numbered by default.  A scalar sets the TOC bookmark:
+\f(CR\- blank: "Preface"\fP.
+.RE
+.sp
+\f(CR\- separator\fP
+.RS 4
+Insert a blank page with its own big, faint centered text watermark
+(useful for "intentionally blank" or chapter title pages).  The
+scalar form provides the overlaid text: \f(CR\- separator: "The End"\fP.
+.RE
+.sp
+All four YAML shapes are accepted:
+.sp
+.if n .RS 4
+.nf
+.fam C
+files:
+  \- blank\&                                               # bare keyword
+  \- blank: "Preface"\&                                    # scalar
+  \- blank: {title: "Preface", number: hide}\&             # flow mapping
+  \- separator:\&                                          # block mapping
+      text: "The End"
+      number: skip
+      font_size: 48
+      opacity: 0.4
+      color: [0.3, 0.3, 0.3]
+.fam
+.fi
+.if n .RE
+.sp
+\f(CRnumber\fP takes one of three values:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+\f(CRshow\fP (default) \- counted and numbered;
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+\f(CRhide\fP \- counted but no number printed (removes the number badge
+while keeping numbering consistent with physical page count);
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.  sp -1
+.  IP \(bu 2.3
+.\}
+\f(CRskip\fP \- not counted, no number, no TOC bookmark (cover\-like).
+.RE
+.sp
+Options accepted by \f(CRseparator\fP: \f(CRtext\fP, \f(CRtitle\fP, \f(CRnumber\fP, \f(CRfont_size\fP,
+\f(CRopacity\fP, \f(CRcolor\fP (RGB triple, 0.0\-1.0).
+.SH "FILES"
+.sp
+\fI$XDG_CONFIG_HOME/combine\-pdf/config.yml\fP
+.RS 4
+User\-level defaults for \f(CRinit\fP (profile, author, paper size,
+watermark text). Falls back to \f(CR~/.config/combine\-pdf/config.yml\fP.
+.RE
+.sp
+\fI./.combine\-pdf.yml\fP
+.RS 4
+Per\-booklet configuration read by \f(CRbuild\fP / \f(CRrefresh\fP.
+.RE
+.SH "EXAMPLES"
+.sp
+Create a YAML and build the booklet:
+.sp
+.if n .RS 4
+.nf
+.fam C
+$ combine\-pdf init \-r \-\-profile book \-\-paper\-size a4 \-\-toc
+$ combine\-pdf
+✓ Booklet built: booklet.pdf
+.fam
+.fi
+.if n .RE
+.sp
+Make a draft with a watermark on the fly:
+.sp
+.if n .RS 4
+.nf
+.fam C
+$ combine\-pdf watermark report.pdf \-t "DRAFT" \-s diagonal \-i
+.fam
+.fi
+.if n .RE
+.sp
+Encrypt the booklet as part of the build:
+.sp
+.if n .RS 4
+.nf
+.fam C
+$ combine\-pdf \-\-encrypt \-u "s3cret"
+.fam
+.fi
+.if n .RE
+.sp
+Protect a RIB (bank details) from extraction:
+.sp
+.if n .RS 4
+.nf
+.fam C
+$ combine\-pdf watermark rib.pdf \-t "FOR LANDLORD X — 2026\-11\-11" \-s tiled \-i
+$ combine\-pdf rasterize rib.pdf \-i
+.fam
+.fi
+.if n .RE
+.SH "EXIT STATUS"
+.sp
+\fB0\fP
+.RS 4
+Success.
+.RE
+.sp
+\fB1\fP
+.RS 4
+Any error (missing file, malformed YAML, invalid option, Ghostscript
+failure, encryption/password mismatch, ...).
+.RE
+.SH "ENVIRONMENT"
+.sp
+\fBXDG_CONFIG_HOME\fP
+.RS 4
+Overrides the location of the user\-level config.
+.RE
+.SH "AUTHORS"
+.sp
+Philippe Nénert \c
+.MTO "philippe\(ataloli.fr" "" ""
+for ALOLI s.a.s.
+Crystal port of the Ruby gem \f(CRcombine_pdf\fP by Boaz Segev.
+.SH "SEE ALSO"
+.sp
+\fBqpdf\fP(1), \fBgs\fP(1), \fBpdf\-sign\fP(1)
+.sp
+The declarative YAML format is described in detail in the project
+README:
+.sp
+.if n .RS 4
+.nf
+.fam C
+https://github.com/aloli\-crystal/combine\-pdf
+.fam
+.fi
+.if n .RE
+.SH "AUTHOR"
+.sp
+Philippe Nénert

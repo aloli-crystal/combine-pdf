@@ -1,0 +1,438 @@
+= combine-pdf(1)
+Philippe Nénert <philippe@aloli.fr>
+:doctype: manpage
+:manmanual: COMBINE-PDF
+:mansource: COMBINE-PDF
+:man-linkstyle: pass:[blue R < >]
+
+== NOM
+
+combine-pdf - assemble, numérote, filigrane, compresse, chiffre et signe des livrets PDF
+
+== SYNOPSIS
+
+*combine-pdf* [_SOUS-COMMANDE_] [_OPTIONS_] [_FICHIERS_...]
+
+*combine-pdf* `init` [`-r`] [`--profile` _NOM_] [__init-options__...]
+
+*combine-pdf* [`build`]
+
+*combine-pdf* `refresh` [`-r`]
+
+*combine-pdf* `compress` _FICHIER.pdf_ [`-o` _SORTIE.pdf_ | `-i`] [`-L`] [`--deep`]
+
+*combine-pdf* `encrypt`|`decrypt` _FICHIER.pdf_ [`-o` _SORTIE.pdf_ | `-i`] [`-u` _MDP_] [`-l` _NIVEAU_]
+
+*combine-pdf* `rasterize`|`watermark`|`gs` _FICHIER.pdf_ [__options__...]
+
+*combine-pdf* `sign`|`verify` __args__...   (déléguées à `pdf-sign`)
+
+*combine-pdf* `merge`|`assemble`|`number` _FICHIERS_... (sous-commandes historiques)
+
+== DESCRIPTION
+
+*combine-pdf* est le portage Crystal de la gem Ruby `combine_pdf`,
+étendu en constructeur de livret déclaratif. Il lit un fichier
+*.combine-pdf.yml* dans le dossier courant et produit un PDF unique qui :
+
+* concatène tous les fichiers listés (plus d'éventuelles pages
+  spéciales — voir `ENTRÉES BLANK ET SEPARATOR` ci-dessous) ;
+* ajoute une page de couverture et un sommaire cliquable ;
+* numérote les pages globalement et à l'intérieur des partitions, en
+  laissant les pages de type couverture non comptabilisées ;
+* applique un filigrane texte en diagonale/mosaïque/centré (optionnel) ;
+* chiffre éventuellement la sortie (RC4-128, AES-128, AES-256) et/ou la
+  signe (PAdES B-B / B-T / B-LT / B-LTA, via `pdf-sign`).
+
+Sans sous-commande, *combine-pdf* lit le YAML du dossier courant et
+construit le livret. Le PDF produit est ouvert automatiquement dans le
+visionneur du système quand stdout *et* stderr sont des terminaux
+interactifs (`open` sur macOS, `xdg-open` sur Linux/BSD) ; passer
+`--no-open` pour désactiver.
+
+== COMMANDES
+
+*init* [`-r`] [options]::
+  Crée un *.combine-pdf.yml* dans le dossier courant, pré-rempli avec
+  la liste des PDF présents. `-r`/`--recursive` inclut les
+  sous-dossiers.
+
+*build* (ou aucune sous-commande)::
+  Lit le YAML local et produit le livret.
+
+*refresh* [`-r`]::
+  Met à jour la section `files:` du YAML : ajoute en fin les nouveaux
+  PDFs, commente les entrées dont le fichier a disparu. Préserve
+  commentaires, ordre et titres.
+
+*compress* _FICHIER_ [`-o` _SORTIE_ | `-i`] [`-L`] [`--deep`]::
+  Réduit la taille d'un PDF unique via recompression Flate uniforme et
+  garbage collection des objets orphelins (gain typique 30-80 %).
+  `-L`/`--linearize` active la visualisation progressive (Fast Web
+  View, ISO 32000-1 § F) et nécessite *qpdf*. `--deep` ajoute le
+  downsampling des images via Ghostscript (nécessite *gs*).
+
+*gs* _FICHIER_::
+  Normalise un PDF via Ghostscript. Utile quand le parser interne
+  refuse un PDF mal formé (p. ex. anciens PDF linéarisés Acrobat avec
+  flux zlib invalide).
+
+*encrypt* _FICHIER_ [`-l` _NIVEAU_] [`-u` _MDP_UTILISATEUR_] [`-w` _MDP_OWNER_]::
+  Chiffre un PDF (Standard Security Handler). _NIVEAU_ est l'un de
+  `rc4_128`, `aes_128`, `aes_256` (défaut).
+
+*decrypt* _FICHIER_ [`-u` _MDP_]::
+  Supprime le dictionnaire `/Encrypt` d'un PDF. Le mot de passe vide
+  est essayé par défaut, ce qui fonctionne pour les PDFs « owner-only »
+  (restrictions sans mot de passe à l'ouverture).
+
+*rasterize* _FICHIER_ [`--dpi` _N_] [`--quality` _Q_]::
+  Rastérise chaque page en JPEG plein page (via Ghostscript) puis
+  réembarque dans un nouveau PDF. Compromis anti-extraction /
+  anti-falsification : plus de texte extractible, fichier plus gros,
+  accessibilité dégradée.
+
+*watermark* _FICHIER_ `-t` _TEXTE_ [`-s` _STYLE_]::
+  Applique un filigrane texte sur toutes les pages. _STYLE_ est l'un
+  de `diagonal` (défaut), `tiled`, `header`, `footer`, `center`.
+
+*sign* `-i` _IN_ `-o` _OUT_ `-c` _CERT.p12_ `-p` _VAR_ENV_ [...]::
+*verify* _SIGNE.pdf_ [`-a` _CA.pem_]::
+  Délégations vers `pdf-sign` (shard *aloli-crystal/pdf-signature*).
+  La phrase de passe de signature est passée comme *nom* d'une variable
+  d'environnement, jamais sa valeur.
+
+*merge* _FICHIER1_ _FICHIER2_ ...::
+  Concatène des PDFs en `merged.pdf` (ou `-o` _SORTIE_).
+
+*assemble* _FICHIER1_ _FICHIER2_ ...::
+  Merge + numérotation automatique en une commande (équivalent CLI du
+  workflow déclaratif).
+
+*number* _FICHIER_::
+  Numérote les pages d'un PDF existant.
+
+*help* [_SOUS-COMMANDE_]::
+  Affiche l'aide courte ; avec un argument, affiche la section de
+  l'aide détaillée correspondante.
+
+== OPTIONS
+
+=== Globales
+
+`-d` _DOSSIER_, `--dir=`_DOSSIER_::
+  Dossier cible (défaut : `.`).
+
+`-r`, `--recursive`::
+  Mode récursif pour `init` et `refresh`.
+
+`-R`, `--no-flatten-rotation`::
+  Désactive le pré-traitement qpdf `--flatten-rotation` des PDFs
+  sources dont une page porte `/Rotate` ≠ 0 (cas Aperçu macOS).
+
+`--no-open`::
+  Ne pas ouvrir le PDF produit dans le visionneur système après
+  `build`.
+
+`-h`, `--help`::
+  Affiche l'aide courte.
+
+`-v`, `--version`::
+  Affiche la version.
+
+=== Options de `init`
+
+`--profile=`_NOM_::
+  L'un de `booklet` (défaut), `book`, `report`, `slides`, `minimal`.
+
+`--author=`_TEXTE_::
+  Surcharge l'auteur (défaut : `git config user.name`).
+
+`--title=`_TEXTE_::
+  Surcharge le titre (défaut : nom du dossier).
+
+`--paper-size=`_TAILLE_::
+  `a4` (défaut), `letter`, `legal`, `a3`, `a5`, `b5`, `executive`, ou
+  `LxH` en points.
+
+`--cover=`_MODE_::
+  `none` (défaut), `recto`, ou `recto-verso`.
+
+`--duplex`::
+  Génère `duplex: true` dans le YAML.
+
+`--header`::
+  Active le header de partition (titre du fichier en haut de chaque
+  page).
+
+`--toc`::
+  Active la page de titre et le sommaire cliquable.
+
+`--watermark=`_TEXTE_::
+  Active la section filigrane avec ce texte.
+
+`--no-numbering`::
+  Désactive toute la numérotation (`numbering.enabled: false`).
+
+`--init-format=`_FMT_::
+  Surcharge le format global de numérotation (défaut : `• %page% /
+  %total% •`).
+
+`--init-output=`_FICHIER_::
+  Surcharge le nom du PDF de sortie.
+
+`--skip-header`, `--skip-toc`, `--skip-watermark`::
+  Omet entièrement la section correspondante du YAML généré.
+
+`--user-config=`_CHEMIN_::
+  Chemin de la config user (défaut :
+  `$XDG_CONFIG_HOME/combine-pdf/config.yml`).
+
+=== Options de `compress`
+
+`-i`, `--in-place`::
+  Réécrit le fichier d'entrée atomiquement via un `.tmp.`_PID_.
+
+`--backup`::
+  Conserve l'original en `.bak` avec `-i`.
+
+`-L`, `--linearize`::
+  Active la visualisation progressive (Fast Web View, ISO 32000-1
+  § F). Nécessite *qpdf*. Ne pas combiner avec un PDF déjà signé PAdES.
+
+`--deep`::
+  Compression profonde via Ghostscript (downsampling images, JPEG,
+  fonts). Nécessite *gs*.
+
+`--deep-quality=`_Q_::
+  Preset Ghostscript : `screen`, `ebook` (défaut), `printer`,
+  `prepress`.
+
+=== Options de `encrypt`
+
+`-l` _NIVEAU_, `--level=`_NIVEAU_::
+  `rc4_128`, `aes_128`, ou `aes_256` (défaut).
+
+`-u` _MDP_, `--user-password=`_MDP_::
+  Mot de passe utilisateur (vide : pas de mot de passe à l'ouverture,
+  restrictions owner uniquement).
+
+`-w` _MDP_, `--owner-password=`_MDP_::
+  Mot de passe owner (défaut : identique au mot de passe utilisateur).
+
+`-p` _LISTE_, `--permissions=`_LISTE_::
+  CSV de `print`, `copy`, `modify`, `annotate`, ou `none` / `all`.
+
+`-I` _MDP_, `--input-password=`_MDP_::
+  Mot de passe à essayer sur les PDFs sources chiffrés (utilisé par
+  `build` et `decrypt`).
+
+`--encrypt`, `--no-encrypt`::
+  Force le chiffrement on/off lors d'un `build`, en surchargeant le
+  YAML.
+
+=== Options de `rasterize`
+
+`--dpi=`_N_::
+  Résolution de rendu en dpi (défaut : 200). 150 = écran, 300 =
+  imprimable.
+
+`--quality=`_Q_::
+  Qualité JPEG 0-100 (défaut : 85).
+
+=== Options de `watermark`
+
+`-t` _TEXTE_, `--text=`_TEXTE_::
+  Texte du filigrane (obligatoire pour `watermark`).
+
+`-s` _STYLE_, `--style=`_STYLE_::
+  `diagonal` (défaut), `tiled`, `header`, `footer`, `center`.
+
+`--opacity=`_O_::
+  Opacité 0.0-1.0 (défaut : 0.15).
+
+`--rotation=`_A_::
+  Rotation en degrés (défaut : 45 pour diagonal/tiled, 0 ailleurs).
+
+`--wm-color=`_R,G,B_::
+  Couleur RGB du filigrane 0.0-1.0 (défaut : `0.5,0.5,0.5`).
+
+`--wm-font-size=`_N_::
+  Taille du filigrane (défaut : 48).
+
+=== Options des sous-commandes historiques (`merge` / `assemble` / `number`)
+
+`-o` _FICHIER_, `--output=`_FICHIER_::
+  Fichier de sortie.
+
+`--font-size=`_TAILLE_::
+  Taille de police (défaut : 10).
+
+`--color=`_R,G,B_::
+  Couleur RGB du texte (défaut : `0.2,0.2,0.2`).
+
+`--margin=`_PT_::
+  Marge en points (défaut : 24).
+
+`--global-format=`_FMT_::
+  Format global de numérotation (défaut : `%page%/%total%`).
+
+`--partition-format=`_FMT_::
+  Format intra-partition.
+
+`--partitions=`_LISTE_::
+  Tailles séparées par virgule (p. ex. `4,2,1`).
+
+`--skip=`_PAGES_::
+  Numéros de pages 1-based à ne pas numéroter (séparés par virgule).
+
+`--show-single-partitions`::
+  Affiche le numéro intra-partition même pour une partition d'une
+  seule page.
+
+== CONFIGURATION
+
+Un `.combine-pdf.yml` complet ressemble à ceci :
+
+----
+output: livret.pdf
+title: "Mon livret"
+author: "Jean Dupont"
+paper_size: a4
+duplex: false
+
+numbering:
+  enabled: true
+  global:
+    enabled: true
+    format: "• %page% / %total% •"
+
+toc:
+  enabled: true
+
+watermark:
+  enabled: false
+  text: "BROUILLON"
+  style: diagonal
+  opacity: 0.15
+
+encrypt:
+  enabled: false
+  level: aes_256
+  user_password: ""
+  owner_password: ""
+  permissions: [print]
+
+files:
+  - chapitre-1.pdf
+  - chapitre-2.pdf
+----
+
+=== ENTRÉES BLANK ET SEPARATOR
+
+Depuis 1.0.31.52, la liste `files:` accepte deux mots-clés réservés
+en plus des chemins habituels.
+
+`- blank`::
+  Insère une page vierge (A4 par défaut, ou `paper_size`). Comptée et
+  numérotée par défaut. La forme scalaire fixe le signet du
+  sommaire : `- blank: "Prélude"`.
+
+`- separator`::
+  Insère une page vierge avec son propre filigrane texte, gros et
+  très fin, centré (utile pour les mentions « page intentionnellement
+  blanche » ou pour les pages titres de chapitre). La forme scalaire
+  fournit le texte imprimé : `- separator: "Fin"`.
+
+Les quatre formes YAML sont acceptées :
+
+----
+files:
+  - blank                                               # mot-clé nu
+  - blank: "Prélude"                                    # scalaire
+  - blank: {title: "Prélude", number: hide}             # flow mapping
+  - separator:                                          # block mapping
+      text: "Fin"
+      number: skip
+      font_size: 48
+      opacity: 0.4
+      color: [0.3, 0.3, 0.3]
+----
+
+`number` prend trois valeurs :
+
+* `show` (défaut) — comptée et numérotée ;
+* `hide` — comptée mais pas de numéro imprimé (retire le badge tout en
+  conservant la cohérence de numérotation avec le nombre de pages
+  physiques) ;
+* `skip` — ni comptée, ni numérotée, pas de signet dans le sommaire
+  (comme une couverture).
+
+Options acceptées par `separator` : `text`, `title`, `number`,
+`font_size`, `opacity`, `color` (triplet RGB, 0.0-1.0).
+
+== FICHIERS
+
+_$XDG_CONFIG_HOME/combine-pdf/config.yml_::
+  Défauts utilisateur pour `init` (profil, auteur, taille papier,
+  texte du filigrane). Repli sur `~/.config/combine-pdf/config.yml`.
+
+_./.combine-pdf.yml_::
+  Configuration par livret, lue par `build` / `refresh`.
+
+== EXEMPLES
+
+Créer un YAML et construire le livret :
+
+----
+$ combine-pdf init -r --profile book --paper-size a4 --toc
+$ combine-pdf
+✓ Livret construit : livret.pdf
+----
+
+Marquer un brouillon à la volée :
+
+----
+$ combine-pdf watermark rapport.pdf -t "BROUILLON" -s diagonal -i
+----
+
+Chiffrer le livret lors du build :
+
+----
+$ combine-pdf --encrypt -u "s3cret"
+----
+
+Protéger un RIB contre l'extraction :
+
+----
+$ combine-pdf watermark rib.pdf -t "POUR BAILLEUR X — 2026-11-11" -s tiled -i
+$ combine-pdf rasterize rib.pdf -i
+----
+
+== CODES DE RETOUR
+
+*0*::
+  Succès.
+
+*1*::
+  N'importe quelle erreur (fichier manquant, YAML mal formé, option
+  invalide, échec Ghostscript, mot de passe de chiffrement erroné, ...).
+
+== ENVIRONNEMENT
+
+*XDG_CONFIG_HOME*::
+  Surcharge l'emplacement de la configuration utilisateur.
+
+== AUTEURS
+
+Philippe Nénert <philippe@aloli.fr> pour ALOLI s.a.s.
+Portage Crystal de la gem Ruby `combine_pdf` de Boaz Segev.
+
+== VOIR AUSSI
+
+*qpdf*(1), *gs*(1), *pdf-sign*(1)
+
+Le format YAML déclaratif est décrit en détail dans le README du
+projet :
+
+  https://github.com/aloli-crystal/combine-pdf

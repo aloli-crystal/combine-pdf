@@ -149,7 +149,7 @@ Add to your `shard.yml`:
 dependencies:
   combine-pdf:
     github: aloli-crystal/combine-pdf
-    version: "~> 1.0.31.47"
+    version: "~> 1.0.31.53"
 ----
 
 then run `shards install`.
@@ -159,9 +159,46 @@ For the CLI:
 [source,shell]
 ----
 git clone https://github.com/aloli-crystal/combine-pdf
-cd combine-pdf
-shards build --release
-cp bin/combine-pdf ~/bin/   # or use bin-installer
+shards build --release -C combine-pdf
+ln -s "$PWD/combine-pdf/bin/combine-pdf" ~/bin/combine-pdf
+----
+
+A symlink keeps `~/bin/combine-pdf` in sync with the next
+`shards build --release` — no `sudo`, no duplicate binary.
+
+=== Manual
+
+The manpage is shipped under `man/` (English) and `man/fr/` (French),
+in both AsciiDoc source and pre-compiled troff. Install it system-wide
+with one of:
+
+[source,shell]
+----
+# Homebrew-managed MANPATH (macOS, recommended)
+install -Dm644 combine-pdf/man/combine-pdf.1 \
+  /opt/homebrew/share/man/man1/combine-pdf.1
+install -Dm644 combine-pdf/man/fr/combine-pdf.1 \
+  /opt/homebrew/share/man/fr/man1/combine-pdf.1
+
+# System MANPATH (Linux / BSD)
+sudo install -Dm644 combine-pdf/man/combine-pdf.1 \
+  /usr/local/share/man/man1/combine-pdf.1
+sudo install -Dm644 combine-pdf/man/fr/combine-pdf.1 \
+  /usr/local/share/man/fr/man1/combine-pdf.1
+----
+
+Then `man combine-pdf` prints the manual in the language that matches
+`$LANG`/`$LC_MESSAGES`, falling back to English. `combine-pdf --help`
+prints a one-screen cheat sheet that points to the manpage ;
+`combine-pdf --help-full` (`-H`) keeps the historic verbose banner with
+every single option.
+
+If you want to re-render the troff after editing the AsciiDoc source:
+
+[source,shell]
+----
+asciidoctor -b manpage combine-pdf/man/combine-pdf.1.adoc
+asciidoctor -b manpage combine-pdf/man/fr/combine-pdf.1.adoc
 ----
 
 == Mode déclaratif

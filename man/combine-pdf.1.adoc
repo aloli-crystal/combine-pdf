@@ -1,0 +1,424 @@
+= combine-pdf(1)
+Philippe Nénert <philippe@aloli.fr>
+:doctype: manpage
+:manmanual: COMBINE-PDF
+:mansource: COMBINE-PDF
+:man-linkstyle: pass:[blue R < >]
+
+== NAME
+
+combine-pdf - assemble, number, watermark, compress, encrypt and sign PDF booklets
+
+== SYNOPSIS
+
+*combine-pdf* [_SUBCOMMAND_] [_OPTIONS_] [_FILES_...]
+
+*combine-pdf* `init` [`-r`] [`--profile` _NAME_] [__init-options__...]
+
+*combine-pdf* [`build`]
+
+*combine-pdf* `refresh` [`-r`]
+
+*combine-pdf* `compress` _FILE.pdf_ [`-o` _OUT.pdf_ | `-i`] [`-L`] [`--deep`]
+
+*combine-pdf* `encrypt`|`decrypt` _FILE.pdf_ [`-o` _OUT.pdf_ | `-i`] [`-u` _PWD_] [`-l` _LEVEL_]
+
+*combine-pdf* `rasterize`|`watermark`|`gs` _FILE.pdf_ [__options__...]
+
+*combine-pdf* `sign`|`verify` __args__...   (forwarded to `pdf-sign`)
+
+*combine-pdf* `merge`|`assemble`|`number` _FILES_... (historic subcommands)
+
+== DESCRIPTION
+
+*combine-pdf* is the Crystal port of the Ruby gem `combine_pdf`, extended
+into a declarative booklet builder. It reads a *.combine-pdf.yml* file in
+the current directory and produces a single PDF that:
+
+* concatenates every listed file (plus optional special pages: see
+  `BLANK AND SEPARATOR ENTRIES` below);
+* prepends a cover page and a clickable table of contents;
+* numbers pages globally and inside partitions, with cover-like pages
+  left uncounted;
+* applies an optional diagonal/tiled/center text watermark;
+* optionally encrypts the output (RC4-128, AES-128, AES-256) and/or
+  signs it (PAdES B-B / B-T / B-LT / B-LTA, via `pdf-sign`).
+
+Without a subcommand, *combine-pdf* reads the YAML in the current
+directory and builds the booklet.  The produced PDF opens automatically
+in the system viewer when stdout and stderr are both interactive
+terminals (macOS `open`, Linux/BSD `xdg-open`); pass `--no-open` to
+disable this.
+
+== COMMANDS
+
+*init* [`-r`] [options]::
+  Create a *.combine-pdf.yml* in the current directory, prefilled with
+  the PDFs found there.  `-r`/`--recursive` lists PDFs in subdirectories
+  too.
+
+*build* (or no subcommand)::
+  Read the local YAML and produce the booklet.
+
+*refresh* [`-r`]::
+  Update the `files:` section of the YAML: append new PDFs at the end,
+  comment out entries whose file has disappeared.  Preserves comments,
+  order and titles.
+
+*compress* _FILE_ [`-o` _OUT_ | `-i`] [`-L`] [`--deep`]::
+  Shrink a single PDF through uniform Flate recompression and
+  orphan-object garbage collection (typical gain 30-80%).
+  `-L`/`--linearize` enables Fast Web View (ISO 32000-1 § F) and
+  requires *qpdf*.  `--deep` adds image downsampling via Ghostscript
+  (requires *gs*).
+
+*gs* _FILE_::
+  Normalise a PDF through Ghostscript.  Use when the internal parser
+  refuses a malformed PDF (e.g. legacy linearised Acrobat files with
+  invalid zlib streams).
+
+*encrypt* _FILE_ [`-l` _LEVEL_] [`-u` _USER_PWD_] [`-w` _OWNER_PWD_]::
+  Encrypt a PDF (Standard Security Handler).  _LEVEL_ is one of
+  `rc4_128`, `aes_128`, `aes_256` (default).
+
+*decrypt* _FILE_ [`-u` _PWD_]::
+  Strip the `/Encrypt` dictionary from a PDF.  An empty password is
+  used by default, which works for "owner-only" protected files.
+
+*rasterize* _FILE_ [`--dpi` _N_] [`--quality` _Q_]::
+  Render each page to a full-page JPEG via Ghostscript and re-embed it
+  in a new PDF.  Anti-extraction / anti-tampering trade-off: no more
+  extractable text, larger files, degraded accessibility.
+
+*watermark* _FILE_ `-t` _TEXT_ [`-s` _STYLE_]::
+  Overlay a text watermark on every page.  _STYLE_ is one of `diagonal`
+  (default), `tiled`, `header`, `footer`, `center`.
+
+*sign* `-i` _IN_ `-o` _OUT_ `-c` _CERT.p12_ `-p` _ENV_VAR_ [...]::
+*verify* _SIGNED.pdf_ [`-a` _CA.pem_]::
+  Thin forwarders to `pdf-sign` (shard *aloli-crystal/pdf-signature*).
+  The signing passphrase is passed as the *name* of an environment
+  variable, never its value.
+
+*merge* _FILE1_ _FILE2_ ...::
+  Concatenate PDFs into `merged.pdf` (or `-o` _OUT_).
+
+*assemble* _FILE1_ _FILE2_ ...::
+  Merge + automatic numbering in one shot (CLI equivalent of the YAML
+  booklet workflow).
+
+*number* _FILE_::
+  Number the pages of an existing PDF.
+
+*help* [_SUBCOMMAND_]::
+  Print the short help; with a subcommand, show the matching section
+  of the full help.
+
+== OPTIONS
+
+=== Global
+
+`-d` _DIR_, `--dir=`_DIR_::
+  Target directory (default: `.`).
+
+`-r`, `--recursive`::
+  Recursive mode for `init` and `refresh`.
+
+`-R`, `--no-flatten-rotation`::
+  Disable qpdf's `--flatten-rotation` pre-processing of source PDFs
+  whose pages carry `/Rotate` ≠ 0 (macOS Preview case).
+
+`--no-open`::
+  Never open the produced PDF in the system viewer after `build`.
+
+`-h`, `--help`::
+  Print the short help.
+
+`-v`, `--version`::
+  Print the version.
+
+=== init options
+
+`--profile=`_NAME_::
+  One of `booklet` (default), `book`, `report`, `slides`, `minimal`.
+
+`--author=`_TEXT_::
+  Override the author (default: `git config user.name`).
+
+`--title=`_TEXT_::
+  Override the title (default: directory name).
+
+`--paper-size=`_SIZE_::
+  `a4` (default), `letter`, `legal`, `a3`, `a5`, `b5`, `executive`, or
+  `WxH` in points.
+
+`--cover=`_MODE_::
+  `none` (default), `recto`, or `recto-verso`.
+
+`--duplex`::
+  Generate `duplex: true` in the YAML.
+
+`--header`::
+  Enable the partition header (per-file title at the top of each page).
+
+`--toc`::
+  Enable the title page and clickable table of contents.
+
+`--watermark=`_TEXT_::
+  Enable the watermark section with this text.
+
+`--no-numbering`::
+  Disable all numbering (`numbering.enabled: false`).
+
+`--init-format=`_FMT_::
+  Override the global numbering format (default: `• %page% / %total% •`).
+
+`--init-output=`_FILE_::
+  Override the output PDF filename.
+
+`--skip-header`, `--skip-toc`, `--skip-watermark`::
+  Omit the corresponding section entirely from the generated YAML.
+
+`--user-config=`_PATH_::
+  Path to the user-level config (default: `$XDG_CONFIG_HOME/combine-pdf/config.yml`).
+
+=== compress options
+
+`-i`, `--in-place`::
+  Overwrite the input file atomically through a `.tmp.`_PID_ file.
+
+`--backup`::
+  Keep the original as `.bak` when combined with `-i`.
+
+`-L`, `--linearize`::
+  Enable Fast Web View (ISO 32000-1 § F).  Requires *qpdf*.  Do NOT
+  combine with a PAdES-signed PDF.
+
+`--deep`::
+  Deep compression through Ghostscript (image downsampling, JPEG,
+  fonts).  Requires *gs*.
+
+`--deep-quality=`_Q_::
+  Ghostscript preset: `screen`, `ebook` (default), `printer`, `prepress`.
+
+=== encrypt options
+
+`-l` _LEVEL_, `--level=`_LEVEL_::
+  `rc4_128`, `aes_128`, or `aes_256` (default).
+
+`-u` _PWD_, `--user-password=`_PWD_::
+  User password (empty: no open password, owner-only restrictions).
+
+`-w` _PWD_, `--owner-password=`_PWD_::
+  Owner password (default: same as user password).
+
+`-p` _LIST_, `--permissions=`_LIST_::
+  CSV of `print`, `copy`, `modify`, `annotate`, or `none` / `all`.
+
+`-I` _PWD_, `--input-password=`_PWD_::
+  Password to try on encrypted input PDFs (used by `build` and `decrypt`).
+
+`--encrypt`, `--no-encrypt`::
+  Force encryption on/off during `build`, overriding the YAML.
+
+=== rasterize options
+
+`--dpi=`_N_::
+  Rendering resolution in dpi (default: 200).  150 = screen, 300 =
+  printable.
+
+`--quality=`_Q_::
+  JPEG quality 0-100 (default: 85).
+
+=== watermark options
+
+`-t` _TEXT_, `--text=`_TEXT_::
+  Watermark text (required for `watermark`).
+
+`-s` _STYLE_, `--style=`_STYLE_::
+  `diagonal` (default), `tiled`, `header`, `footer`, `center`.
+
+`--opacity=`_O_::
+  Opacity 0.0-1.0 (default: 0.15).
+
+`--rotation=`_A_::
+  Rotation in degrees (default: 45 for diagonal/tiled, 0 otherwise).
+
+`--wm-color=`_R,G,B_::
+  RGB watermark color 0.0-1.0 (default: `0.5,0.5,0.5`).
+
+`--wm-font-size=`_N_::
+  Font size (default: 48).
+
+=== Historic subcommand options (`merge` / `assemble` / `number`)
+
+`-o` _FILE_, `--output=`_FILE_::
+  Output file.
+
+`--font-size=`_SIZE_::
+  Text size (default: 10).
+
+`--color=`_R,G,B_::
+  RGB text color (default: `0.2,0.2,0.2`).
+
+`--margin=`_PT_::
+  Margin in points (default: 24).
+
+`--global-format=`_FMT_::
+  Global numbering format (default: `%page%/%total%`).
+
+`--partition-format=`_FMT_::
+  Intra-partition format.
+
+`--partitions=`_LIST_::
+  Comma-separated sizes (e.g. `4,2,1`).
+
+`--skip=`_PAGES_::
+  1-based page numbers not to number (comma-separated).
+
+`--show-single-partitions`::
+  Show the intra-partition number even for single-page partitions.
+
+== CONFIGURATION
+
+A full `.combine-pdf.yml` looks like this:
+
+----
+output: booklet.pdf
+title: "My booklet"
+author: "Jane Doe"
+paper_size: a4
+duplex: false
+
+numbering:
+  enabled: true
+  global:
+    enabled: true
+    format: "• %page% / %total% •"
+
+toc:
+  enabled: true
+
+watermark:
+  enabled: false
+  text: "DRAFT"
+  style: diagonal
+  opacity: 0.15
+
+encrypt:
+  enabled: false
+  level: aes_256
+  user_password: ""
+  owner_password: ""
+  permissions: [print]
+
+files:
+  - chapter-1.pdf
+  - chapter-2.pdf
+----
+
+=== BLANK AND SEPARATOR ENTRIES
+
+Since 1.0.31.52, the `files:` list accepts two reserved keywords
+alongside regular paths.
+
+`- blank`::
+  Insert a blank page (A4 by default, or `paper_size`).  Counted and
+  numbered by default.  A scalar sets the TOC bookmark:
+  `- blank: "Preface"`.
+
+`- separator`::
+  Insert a blank page with its own big, faint centered text watermark
+  (useful for "intentionally blank" or chapter title pages).  The
+  scalar form provides the overlaid text: `- separator: "The End"`.
+
+All four YAML shapes are accepted:
+
+----
+files:
+  - blank                                               # bare keyword
+  - blank: "Preface"                                    # scalar
+  - blank: {title: "Preface", number: hide}             # flow mapping
+  - separator:                                          # block mapping
+      text: "The End"
+      number: skip
+      font_size: 48
+      opacity: 0.4
+      color: [0.3, 0.3, 0.3]
+----
+
+`number` takes one of three values:
+
+* `show` (default) - counted and numbered;
+* `hide` - counted but no number printed (removes the number badge
+  while keeping numbering consistent with physical page count);
+* `skip` - not counted, no number, no TOC bookmark (cover-like).
+
+Options accepted by `separator`: `text`, `title`, `number`, `font_size`,
+`opacity`, `color` (RGB triple, 0.0-1.0).
+
+== FILES
+
+_$XDG_CONFIG_HOME/combine-pdf/config.yml_::
+  User-level defaults for `init` (profile, author, paper size,
+  watermark text). Falls back to `~/.config/combine-pdf/config.yml`.
+
+_./.combine-pdf.yml_::
+  Per-booklet configuration read by `build` / `refresh`.
+
+== EXAMPLES
+
+Create a YAML and build the booklet:
+
+----
+$ combine-pdf init -r --profile book --paper-size a4 --toc
+$ combine-pdf
+✓ Booklet built: booklet.pdf
+----
+
+Make a draft with a watermark on the fly:
+
+----
+$ combine-pdf watermark report.pdf -t "DRAFT" -s diagonal -i
+----
+
+Encrypt the booklet as part of the build:
+
+----
+$ combine-pdf --encrypt -u "s3cret"
+----
+
+Protect a RIB (bank details) from extraction:
+
+----
+$ combine-pdf watermark rib.pdf -t "FOR LANDLORD X — 2026-11-11" -s tiled -i
+$ combine-pdf rasterize rib.pdf -i
+----
+
+== EXIT STATUS
+
+*0*::
+  Success.
+
+*1*::
+  Any error (missing file, malformed YAML, invalid option, Ghostscript
+  failure, encryption/password mismatch, ...).
+
+== ENVIRONMENT
+
+*XDG_CONFIG_HOME*::
+  Overrides the location of the user-level config.
+
+== AUTHORS
+
+Philippe Nénert <philippe@aloli.fr> for ALOLI s.a.s.
+Crystal port of the Ruby gem `combine_pdf` by Boaz Segev.
+
+== SEE ALSO
+
+*qpdf*(1), *gs*(1), *pdf-sign*(1)
+
+The declarative YAML format is described in detail in the project
+README:
+
+  https://github.com/aloli-crystal/combine-pdf

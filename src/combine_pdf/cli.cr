@@ -7,6 +7,54 @@ module CombinePDF
   # `combine-pdf` binary AND in-process from the unified
   # `alolipdf` binary (aloli-crystal/pdf-tools). Returns the exit code.
   module Cli
+    # Aide courte : UX Unix classique. `combine-pdf -h`, `combine-pdf
+    # --help` et `combine-pdf help` (sans argument) affichent ce
+    # résumé, qui renvoie à `man combine-pdf` pour le détail. L'aide
+    # complète — banner + toutes les options d'OptionParser — reste
+    # accessible via `-H` / `--help-full`.
+    SHORT_HELP = <<-HELP
+      combine-pdf — assemble, numérote, filigrane, compresse, chiffre et signe des livrets PDF.
+
+      Usage : combine-pdf [SOUS-COMMANDE] [options] [FICHIERS...]
+
+      Mode déclaratif (recommandé) :
+        init [-r]         Crée .combine-pdf.yml dans le dossier courant
+        build             Lit le YAML et construit le livret (défaut)
+        refresh [-r]      Rafraîchit la section files: du YAML
+
+      Opérations sur un PDF unique :
+        compress F        Compression Flate + GC (−30 à −80 %)
+        gs F              Normalise via Ghostscript
+        encrypt F         Chiffre (RC4-128 | AES-128 | AES-256)
+        decrypt F         Déchiffre
+        rasterize F       JPEG plein page via gs (anti-extraction)
+        watermark F -t …  Filigrane texte sur toutes les pages
+
+      Signature (délègue à pdf-sign) :
+        sign …            Signe un PDF (PAdES B-B / B-T / B-LT / B-LTA)
+        verify F          Vérifie les signatures d'un PDF
+
+      Sous-commandes historiques :
+        merge F1 F2 …     Concatène des PDFs
+        assemble F1 F2 …  Merge + numérotation en une commande
+        number F          Numérote les pages
+
+      Options les plus utiles :
+        -d DIR            Dossier cible (défaut : .)
+        -r, --recursive   Mode récursif (init, refresh)
+        -o FICHIER        Fichier de sortie
+        -i, --in-place    Réécrit le fichier d'entrée
+        -u PWD            Mot de passe utilisateur (encrypt / decrypt)
+        --no-open         Ne pas ouvrir le PDF après `build`
+        -v, --version     Affiche la version
+        -H, --help-full   Affiche l'aide complète avec toutes les options
+        help [SUB]        Aide ciblée sur une sous-commande
+
+      Documentation complète :
+        man combine-pdf
+        https://github.com/aloli-crystal/combine-pdf
+      HELP
+
     # Carries an early-exit code out of OptionParser's *captured* blocks
     # (Crystal forbids `return` there) and out of the helper methods.
     private class Halt < Exception
@@ -412,8 +460,12 @@ module CombinePDF
 
         p.separator ""
         p.separator "Aide — tri alpha :"
-        p.on("-h", "--help", "Affiche l'aide") do
+        p.on("-H", "--help-full", "Affiche l'aide complète (équivalent de `man combine-pdf`)") do
           puts p
+          raise Halt.new(0)
+        end
+        p.on("-h", "--help", "Affiche l'aide courte (voir `man combine-pdf` pour le détail)") do
+          puts SHORT_HELP
           raise Halt.new(0)
         end
         p.on("-v", "--version", "Affiche la version") do
@@ -423,7 +475,7 @@ module CombinePDF
 
         p.invalid_option do |flag|
           STDERR.puts "Option inconnue : #{flag}"
-          STDERR.puts p
+          STDERR.puts SHORT_HELP
           raise Halt.new(1)
         end
       end
@@ -471,12 +523,13 @@ module CombinePDF
           positional = positional[1..]
         when "help", "-h", "--help"
           # `help [sous-commande]` — UX standard. Sans argument c'est
-          # l'aide globale (équivalent à --help). Avec argument on filtre
-          # le banner sur la sous-commande demandée pour pointer vite à
-          # la bonne section.
+          # l'aide courte (équivalent à --help, renvoie à `man
+          # combine-pdf`). Avec argument on filtre le banner complet sur
+          # la sous-commande demandée pour pointer vite à la bonne
+          # section.
           sub = positional[1]?
           if sub.nil? || sub.empty?
-            puts parser
+            puts SHORT_HELP
             return 0
           end
           full = parser.to_s
@@ -998,7 +1051,7 @@ module CombinePDF
             STDERR.puts "Erreur : aucune sous-commande spécifiée et aucun #{CombinePDF::ConfigInitializer::CONFIG_FILENAME} trouvé dans #{target_dir}."
             STDERR.puts ""
             STDERR.puts "Pour démarrer : combine-pdf init"
-            STDERR.puts parser
+            STDERR.puts SHORT_HELP
             return 1
           end
         end
@@ -1015,7 +1068,7 @@ module CombinePDF
       when "number"
         if remaining.empty?
           STDERR.puts "Erreur : `number` attend un fichier PDF en argument"
-          STDERR.puts parser
+          STDERR.puts SHORT_HELP
           return 1
         end
         input_path = remaining.first
@@ -1040,7 +1093,7 @@ module CombinePDF
       when "merge"
         if remaining.size < 2
           STDERR.puts "Erreur : `merge` attend au moins deux fichiers PDF"
-          STDERR.puts parser
+          STDERR.puts SHORT_HELP
           return 1
         end
         remaining.each do |path|
@@ -1060,7 +1113,7 @@ module CombinePDF
       when "assemble"
         if remaining.size < 2
           STDERR.puts "Erreur : `assemble` attend au moins deux fichiers PDF"
-          STDERR.puts parser
+          STDERR.puts SHORT_HELP
           return 1
         end
         remaining.each do |path|
@@ -1081,7 +1134,7 @@ module CombinePDF
         end
       else
         STDERR.puts "Erreur : sous-commande inconnue « #{subcommand} »"
-        STDERR.puts parser
+        STDERR.puts SHORT_HELP
         return 1
       end
 

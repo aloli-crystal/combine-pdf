@@ -3,6 +3,52 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.53 — 2026-11-11
+
+=== Added
+
+* **Page de manuel `combine-pdf(1)`** en anglais et en français,
+  livrée en source AsciiDoc et en troff pré-compilé :
++
+--
+* `man/combine-pdf.1.adoc` + `man/combine-pdf.1` (anglais, source
+  canonique).
+* `man/fr/combine-pdf.1.adoc` + `man/fr/combine-pdf.1` (français).
+--
++
+Les troffs sont commités pour que `man combine-pdf` fonctionne sur
+une machine sans asciidoctor installé. Régénération :
+`asciidoctor -b manpage man/combine-pdf.1.adoc`.
+* **Aide CLI courte (~40 lignes) sous `--help` / `-h` / `help`**,
+  avec renvoi explicite vers `man combine-pdf`. Tient dans un écran
+  et liste chaque sous-commande en une ligne.
+* **`--help-full` / `-H`** conserve l'aide verbeuse historique
+  (banner + toutes les options d'`OptionParser`). Compat ascendante
+  pour les scripts qui parsaient l'ancien banner.
+* Spec de non-régression `spec/manpage_spec.cr` : 11 cas vérifiant
+  la longueur de `--help`, la présence du renvoi `man combine-pdf`,
+  l'alias `-H`, la présence des deux sources AsciiDoc et des deux
+  troffs compilés, et la couverture des sections manpage canoniques
+  (NAME/SYNOPSIS/DESCRIPTION/COMMANDS/OPTIONS/CONFIGURATION/FILES/
+  EXAMPLES/EXIT STATUS/ENVIRONMENT/AUTHORS/SEE ALSO) ainsi que la
+  documentation des entrées spéciales `- blank` / `- separator` de
+  1.0.31.52.
+
+=== Changed
+
+* **README (EN + FR)** : section Installation enrichie d'une
+  sous-section « Manual » / « Manuel » avec les commandes
+  d'installation sous `/opt/homebrew/share/man/` (macOS) et
+  `/usr/local/share/man/` (Linux/BSD), plus la régénération du
+  troff.
+* **README (EN + FR)** : la commande d'installation CLI passe de
+  `cp bin/combine-pdf ~/bin/` à `ln -s "$PWD/combine-pdf/bin/…"
+  ~/bin/combine-pdf`, conforme à la convention aloli-crystal
+  (symlink → mise à jour automatique au prochain
+  `shards build --release`, pas de `sudo`, pas de doublon).
+* **Contrainte de version de combine-pdf** dans les deux READMEs :
+  `~> 1.0.31.47` → `~> 1.0.31.53`.
+
 == v1.0.31.52 — 2026-11-11
 
 === Added
