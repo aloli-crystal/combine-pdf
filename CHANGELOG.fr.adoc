@@ -3,6 +3,26 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.55 — 2026-11-12
+
+=== Ajouté
+
+* **Hook pré-commit versionné** sous `.githooks/pre-commit` :
+  rejoue localement `crystal tool format --check` + `ameba` +
+  `crystal spec` avant tout `git commit`. Si l'une des 3 étapes
+  échoue, le commit est annulé.
++
+--
+Activation (une fois par clone) :
+
+[source,shell]
+----
+git config core.hooksPath .githooks
+----
+--
++
+Documenté dans la section « Développement » des READMEs.
+
 == v1.0.31.54 — 2026-11-12
 
 === Corrigé

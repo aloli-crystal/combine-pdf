@@ -755,6 +755,23 @@ bin/ameba
 crystal tool format src/ spec/
 ----
 
+=== Pre-commit hook
+
+Activate once per clone to run format + ameba + specs before every
+`git commit` (same three steps the CI runs):
+
+[source,shell]
+----
+git config core.hooksPath .githooks
+----
+
+To skip it for a single commit — do not make a habit of it:
+
+[source,shell]
+----
+git commit --no-verify
+----
+
 == License
 
 MIT — see link:LICENSE[LICENSE].

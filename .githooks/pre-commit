@@ -1,0 +1,26 @@
+#!/bin/sh
+# Hook pré-commit combine-pdf — rejoue localement les 3 étapes de CI
+# avant chaque `git commit`. Si l'une échoue, le commit est annulé.
+#
+# Activation (à faire une fois par clone) :
+#   git config core.hooksPath .githooks
+#
+# Désactivation ponctuelle (ne JAMAIS en abuser — la CI retombera) :
+#   git commit --no-verify
+
+set -e
+
+# Se placer à la racine du repo pour que les chemins src/ spec/ marchent
+# même si le commit est lancé depuis un sous-dossier.
+cd "$(git rev-parse --show-toplevel)"
+
+echo "→ crystal tool format --check src/ spec/"
+crystal tool format --check src/ spec/
+
+echo "→ ameba"
+crystal run lib/ameba/bin/ameba.cr --
+
+echo "→ crystal spec"
+crystal spec
+
+echo "✓ pré-commit OK"
