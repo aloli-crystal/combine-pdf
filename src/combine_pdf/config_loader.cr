@@ -471,19 +471,17 @@ module CombinePDF
 
     private def yaml_str(opts : Hash(YAML::Any, YAML::Any), key : String) : String?
       node = opts[YAML::Any.new(key)]?
-      return nil unless node
+      return unless node
       node.as_s?
     end
 
     private def yaml_float(opts : Hash(YAML::Any, YAML::Any), key : String) : Float64?
       node = opts[YAML::Any.new(key)]?
-      return nil unless node
+      return unless node
       if v = node.as_f?
         v
       elsif v = node.as_i?
         v.to_f
-      else
-        nil
       end
     end
 
@@ -501,9 +499,9 @@ module CombinePDF
     # Variante sur-un-coup de `parse_color` qui accepte un `YAML::Any`
     # et renvoie `nil` au lieu d'une valeur par défaut.
     private def parse_color_any(node : YAML::Any?) : Tuple(Float64, Float64, Float64)?
-      return nil unless node
+      return unless node
       str = node.as_s?
-      return nil unless str
+      return unless str
       str = str.strip
       if str.starts_with?("#") && str.size == 7
         r = str[1, 2].to_i(16) / 255.0

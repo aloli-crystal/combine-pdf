@@ -16,12 +16,12 @@ describe "entrées spéciales blank / separator" do
   describe "parsing — formes YAML" do
     it "reconnaît `- blank` nu" do
       yaml = <<-YAML
-      output: out.pdf
-      title: ""
-      author: ""
-      files:
-        - blank
-      YAML
+        output: out.pdf
+        title: ""
+        author: ""
+        files:
+          - blank
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       cfg.files.size.should eq(1)
       e = cfg.files.first
@@ -33,9 +33,9 @@ describe "entrées spéciales blank / separator" do
 
     it "reconnaît `- blank: \"Prélude\"` (scalaire = title)" do
       yaml = <<-YAML
-      files:
-        - blank: "Prélude"
-      YAML
+        files:
+          - blank: "Prélude"
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       e = cfg.files.first
       e.kind.should eq(CombinePDF::Config::Kind::Blank)
@@ -44,9 +44,9 @@ describe "entrées spéciales blank / separator" do
 
     it "reconnaît le flow YAML `- blank: {title: ..., number: hide}`" do
       yaml = <<-YAML
-      files:
-        - blank: {title: "Prélude", number: hide}
-      YAML
+        files:
+          - blank: {title: "Prélude", number: hide}
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       e = cfg.files.first
       e.kind.should eq(CombinePDF::Config::Kind::Blank)
@@ -56,11 +56,11 @@ describe "entrées spéciales blank / separator" do
 
     it "reconnaît le block multi-ligne `- blank:` + lignes indentées" do
       yaml = <<-YAML
-      files:
-        - blank:
-            title: "Prélude"
-            number: skip
-      YAML
+        files:
+          - blank:
+              title: "Prélude"
+              number: skip
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       cfg.files.size.should eq(1)
       e = cfg.files.first
@@ -71,9 +71,9 @@ describe "entrées spéciales blank / separator" do
 
     it "reconnaît `- separator: \"Intermède\"` (scalaire = text)" do
       yaml = <<-YAML
-      files:
-        - separator: "Intermède"
-      YAML
+        files:
+          - separator: "Intermède"
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       e = cfg.files.first
       e.kind.should eq(CombinePDF::Config::Kind::Separator)
@@ -83,9 +83,9 @@ describe "entrées spéciales blank / separator" do
 
     it "reconnaît le flow séparateur avec options de rendu" do
       yaml = <<-YAML
-      files:
-        - separator: {text: "Chant 1", title: "I", number: show, font_size: 48, opacity: 0.4}
-      YAML
+        files:
+          - separator: {text: "Chant 1", title: "I", number: show, font_size: 48, opacity: 0.4}
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       e = cfg.files.first
       e.kind.should eq(CombinePDF::Config::Kind::Separator)
@@ -97,13 +97,13 @@ describe "entrées spéciales blank / separator" do
 
     it "préserve les entrées régulières autour des spéciales" do
       yaml = <<-YAML
-      files:
-        - intro.pdf
-        - blank: "Prélude"
-        - chapitre-1.pdf
-        - separator: "Intermède"
-        - chapitre-2.pdf
-      YAML
+        files:
+          - intro.pdf
+          - blank: "Prélude"
+          - chapitre-1.pdf
+          - separator: "Intermède"
+          - chapitre-2.pdf
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       cfg.files.map(&.kind).should eq([
         CombinePDF::Config::Kind::Regular,
@@ -119,11 +119,11 @@ describe "entrées spéciales blank / separator" do
 
     it "ignore une entrée spéciale commentée" do
       yaml = <<-YAML
-      files:
-        - intro.pdf
-        # - blank: "Prélude écarté"
-        - chapitre-1.pdf
-      YAML
+        files:
+          - intro.pdf
+          # - blank: "Prélude écarté"
+          - chapitre-1.pdf
+        YAML
       cfg = CombinePDF::ConfigLoader.load_string(yaml)
       cfg.files.size.should eq(3)
       cfg.files[1].excluded.should be_true
@@ -143,18 +143,18 @@ describe "entrées spéciales blank / separator" do
       SpecHelper.write_a4(File.join(dir, "b.pdf"), page_count: 3)
 
       yaml = <<-YAML
-      output: livret.pdf
-      title: "Test"
-      author: "spec"
-      paper_size: a4
-      numbering:
-        enabled: true
-      files:
-        - a.pdf
-        - blank: "Prélude"
-        - b.pdf
-        - separator: {text: "Fin", number: skip}
-      YAML
+        output: livret.pdf
+        title: "Test"
+        author: "spec"
+        paper_size: a4
+        numbering:
+          enabled: true
+        files:
+          - a.pdf
+          - blank: "Prélude"
+          - b.pdf
+          - separator: {text: "Fin", number: skip}
+        YAML
       File.write(File.join(dir, ".combine-pdf.yml"), yaml)
 
       output = CombinePDF::BookletBuilder.from_dir(dir).build
@@ -174,18 +174,18 @@ describe "entrées spéciales blank / separator" do
       SpecHelper.write_a4(File.join(dir, "a.pdf"), page_count: 2)
 
       yaml = <<-YAML
-      output: livret.pdf
-      paper_size: a4
-      numbering:
-        enabled: true
-        global:
+        output: livret.pdf
+        paper_size: a4
+        numbering:
           enabled: true
-          format: "%page%/%total%"
-          style: plain
-      files:
-        - a.pdf
-        - separator: {text: "Fin", number: skip}
-      YAML
+          global:
+            enabled: true
+            format: "%page%/%total%"
+            style: plain
+        files:
+          - a.pdf
+          - separator: {text: "Fin", number: skip}
+        YAML
       File.write(File.join(dir, ".combine-pdf.yml"), yaml)
 
       output = CombinePDF::BookletBuilder.from_dir(dir).build

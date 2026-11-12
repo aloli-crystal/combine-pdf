@@ -177,8 +177,6 @@ module CombinePDF
           base.tr("-_", "  ")
         when Kind::Separator
           @separator_text
-        else
-          nil
         end
       end
     end

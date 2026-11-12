@@ -3,6 +3,22 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.54 — 2026-11-12
+
+=== Corrigé
+
+* **CI ameba de nouveau au vert** : 16 violations introduites par
+  le refacto chantier 1 (v1.0.31.52) :
++
+--
+* 5× `Style/RedundantNilInControlExpression` et 1× `Lint/ElseNil`
+  dans `config_loader.cr` + `config.cr`.
+* 10× `Style/HeredocIndent` dans
+  `spec/special_entries_spec.cr`.
+--
++
+Aucune modification de comportement. 170 specs vertes.
+
 == v1.0.31.53 — 2026-11-11
 
 === Ajouté
