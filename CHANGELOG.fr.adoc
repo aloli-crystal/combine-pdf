@@ -3,6 +3,16 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.56 — 2026-11-19
+
+=== Corrigé
+
+* **Prompt d'onboarding francisé** : `combine-pdf` lancé dans un
+  dossier sans `.combine-pdf.yml` demandait « Voulez-vous le créer
+  maintenant ? **[Y/n]** » — mélange typo FR/EN. Devient
+  « **[O/n]** ». Les réponses `y | yes | o | oui` restent toutes
+  acceptées.
+
 == v1.0.31.55 — 2026-11-12
 
 === Ajouté

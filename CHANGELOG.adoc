@@ -3,6 +3,17 @@
 :toc-title: Versions
 :toclevels: 2
 
+== v1.0.31.56 — 2026-11-19
+
+=== Fixed
+
+* **Prompt interactif d'onboarding francisé** : `combine-pdf` lancé
+  dans un dossier sans `.combine-pdf.yml` demandait « Voulez-vous
+  le créer maintenant ? **[Y/n]** » — mélange typo FR/EN. Devient
+  « **[O/n]** », cohérent avec la phrase française. Si un jour
+  l'onboarding est localisé, le prompt anglais gardera `[Y/n]`.
+  Les réponses acceptées restent `y | yes | o | oui`.
+
 == v1.0.31.55 — 2026-11-12
 
 === Added

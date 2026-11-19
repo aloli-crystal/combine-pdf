@@ -1020,7 +1020,11 @@ module CombinePDF
           # les scripts qui s'appuient sur le code retour.
           if STDIN.tty? && STDERR.tty?
             STDERR.puts "Aucun #{CombinePDF::ConfigInitializer::CONFIG_FILENAME} dans #{target_dir}."
-            STDERR.print "Voulez-vous le créer maintenant (équivalent de `init`) ? [Y/n] "
+            # Le prompt est en français → `[O/n]` (pas `[Y/n]`). Si un jour on
+            # localise l'onboarding en anglais, le prompt anglais gardera
+            # `[Y/n]`. La liste des réponses acceptées plus bas couvre les
+            # deux langues : `y | yes | o | oui`.
+            STDERR.print "Voulez-vous le créer maintenant (équivalent de `init`) ? [O/n] "
             STDERR.flush
             raw = STDIN.gets
             # `nil` = EOF (Ctrl-D ou flux fermé) → on annule explicitement.
